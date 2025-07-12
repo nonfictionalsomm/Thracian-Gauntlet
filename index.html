@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Thracian Gauntlet: A Bulgarian Wine Master's Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background for a premium feel */
+        }
+        .game-card {
+            background-color: #1F2937;
+            border: 1px solid #4B5563;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(167, 139, 250, 0.1), 0 4px 6px -2px rgba(167, 139, 250, 0.05);
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.75);
+        }
+        .sortable-item {
+            cursor: grab;
+            user-select: none;
+        }
+        .sortable-item.dragging {
+            opacity: 0.5;
+            background-color: #4B5563;
+        }
+        .drop-zone {
+            border: 2px dashed #4B5563;
+            min-height: 50px;
+        }
+        .timeline-feedback-item.correct {
+            border-left: 4px solid #10B981;
+        }
+        .timeline-feedback-item.incorrect {
+            border-left: 4px solid #EF4444;
+        }
+        .option-btn {
+            background-color: #374151;
+            border: 1px solid #4B5563;
+        }
+        .option-btn:hover {
+            background-color: #4B5563;
+        }
+        .option-btn.correct {
+            background-color: #059669;
+            border-color: #10B981;
+        }
+        .option-btn.incorrect {
+            background-color: #B91C1C;
+            border-color: #EF4444;
+        }
+        /* Spinner for loading state */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #6D28D9;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="game-container" class="container mx-auto p-4 md:p-8 max-w-5xl">
+
+        <!-- Main Menu Screen -->
+        <div id="main-menu" class="text-center">
+            <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">The Thracian Gauntlet</h1>
+            <p class="text-lg text-gray-400 mb-8">A Bulgarian Wine Master's Challenge</p>
+            <div id="module-selection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Modules will be injected here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="hidden">
+            <button id="back-to-menu" class="btn-secondary mb-6 px-4 py-2 rounded-lg">&larr; Back to Menu</button>
+            <h2 id="game-title" class="text-3xl font-bold mb-4"></h2>
+            <div id="question-area" class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <!-- Game content will be injected here -->
+            </div>
+            <div id="feedback-area" class="mt-4 text-lg"></div>
+            <div id="gemini-area" class="mt-6"></div>
+            <button id="next-question" class="btn-primary mt-6 px-6 py-3 rounded-lg w-full md:w-auto hidden">Next Question</button>
+        </div>
+
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop hidden">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4"></h3>
+            <p id="modal-text" class="text-gray-300 mb-6"></p>
+            <button id="modal-close" class="btn-primary w-full px-4 py-2 rounded-lg">Continue</button>
+        </div>
+    </div>
+
+
+<script>
+// --- DATA STORE ---
+
+const lawQuestionBank = [
+    { prompt: "What is the highest quality tier in the Bulgarian wine classification system, equivalent to a French AOP or Italian DOCG?", options: ["ЗГУ (ZGU)", "Controliran", "ЗНП (ZNP)", "Vino"], answer: "ЗНП (ZNP)" },
+    { prompt: "What is the key difference in maximum permitted yields between a PDO (ЗНП) and a PGI (ЗГУ) wine?", options: ["PDO: 9,000 kg/ha, PGI: 13,000 kg/ha", "PDO: 10,000 kg/ha, PGI: 12,000 kg/ha", "PDO: 13,000 kg/ha, PGI: 9,000 kg/ha", "There is no difference in yield limits."], answer: "PDO: 9,000 kg/ha, PGI: 13,000 kg/ha" },
+    { prompt: "Before Bulgaria's EU accession, what was the term for the highest quality wines, functionally equivalent to today's PDO status?", options: ["DGO (Declared Geographical Origin)", "Reserve", "Controliran", "Premium"], answer: "Controliran" },
+    { prompt: "A Bulgarian wine label says 'Premium Oak'. What does this specifically tell the consumer?", options: ["The wine was aged in large, old casks.", "The wine was aged for a minimum of three years.", "The wine was aged in new oak barrels.", "The wine is from a specific, superior plot."], answer: "The wine was aged in new oak barrels." },
+    { prompt: "Under EU regulations for Wine Growing Zone C, acidification is a common practice in Bulgaria's warmer regions. What is its primary purpose?", options: ["To increase the final alcohol content.", "To add complexity and nutty flavors.", "To restore balance and freshness by raising acidity.", "To deepen the color of red wines."], answer: "To restore balance and freshness by raising acidity." },
+    { prompt: "Which state body is responsible for inspecting vineyards and conducting laboratory analysis to enforce PDO and PGI regulations?", options: ["The Ministry of Tourism", "The National Winemakers Guild", "The Executive Agency on Vine and Wine (EAVW)", "Vinprom"], answer: "The Executive Agency on Vine and Wine (EAVW)" },
+    { prompt: "A wine from the Thracian Valley is labeled 'Special Selection' (Специална селекция). What does this imply compared to a standard PDO wine?", options: ["It is a sparkling wine.", "It was made from 100% international varieties.", "It implies stricter grape selection and/or extended aging.", "It is a sweet, late-harvest wine."], answer: "It implies stricter grape selection and/or extended aging." },
+    { prompt: "What is the primary criticism of the two official PGI designations, Danubian Plain and Thracian Lowlands?", options: ["The names are difficult for international consumers to pronounce.", "They are too small and restrictive for producers.", "They are too vast and encompass too much diversity to be meaningful indicators of terroir.", "They only permit the use of indigenous grape varieties."], answer: "They are too vast and encompass too much diversity to be meaningful indicators of terroir." },
+    { prompt: "For the PDO Vidin, which of the following indigenous red grapes is explicitly permitted alongside Cabernet Sauvignon and Merlot?", options: ["Mavrud", "Rubin", "Shiroka Melnishka Loza", "Gamza"], answer: "Gamza" },
+    { prompt: "What does the Cyrillic acronym ЗГУ (ZGU) stand for on a Bulgarian wine label?", options: ["Protected Designation of Origin", "Protected Geographical Indication", "Special Regional Wine", "Guaranteed Traditional Wine"], answer: "Protected Geographical Indication" },
+    { prompt: "What is the minimum total acidity (expressed as tartaric acid) required for a wine to qualify for PDO or PGI status in Bulgaria?", options: ["3.0 g/L", "3.5 g/L", "4.0 g/L", "4.5 g/L"], answer: "4.0 g/L" },
+    { prompt: "The term 'Barik' (Барик) on a label indicates what winemaking practice?", options: ["Fermentation in amphorae", "Use of ambient yeasts", "Aging in small oak barrels (barriques)", "Whole-bunch fermentation"], answer: "Aging in small oak barrels (barriques)" },
+    { prompt: "For the PDO Sungurlare, which pink-skinned grape is famously permitted for its white wines?", options: ["Pamid", "Misket Cherven", "Dimiat", "Gamza"], answer: "Misket Cherven" },
+    { prompt: "The EU framework for PDOs generally restricts what common viticultural practice, allowing it only in emergencies to prevent artificially high yields?", options: ["Pruning", "Leaf-pulling", "Irrigation", "Harvesting by hand"], answer: "Irrigation" },
+    { prompt: "What is the minimum actual alcohol percentage required for a red PDO wine from Vidin?", options: ["10.5%", "11.0%", "11.5%", "12.0%"], answer: "11.5%" },
+    { prompt: "What is the most basic category in the Bulgarian wine classification pyramid, equivalent to the former 'table wine'?", options: ["PGI", "Vino", "DGO", "Regional Wine"], answer: "Vino" },
+    { prompt: "The term 'Special Reserve' (Специална резерва) denotes what?", options: ["A wine made for export only", "A higher tier of quality, implying stricter grape selection and/or longer aging", "A wine made from 100% indigenous grapes", "A wine bottled in a special commemorative bottle"], answer: "A higher tier of quality, implying stricter grape selection and/or longer aging" },
+    { prompt: "Which of these is NOT a legally defined traditional aging term in Bulgaria?", options: ["Reserve (Резерва)", "Grand Cru", "Special Selection (Специална селекция)", "Premium Oak"], answer: "Grand Cru" },
+    { prompt: "The practice of chaptalization is permitted in Bulgaria under specific circumstances. What is its purpose?", options: ["To add sweetness to the final wine", "To increase the wine's acidity", "As a corrective measure to increase potential alcohol in cool years", "To stabilize the wine's color"], answer: "As a corrective measure to increase potential alcohol in cool years" },
+    { prompt: "The PDO system replaced which older domestic classification for the highest quality wines?", options: ["Vinprom Select", "DGO (Declared Geographical Origin)", "Controliran", "Balkan Quality Wine"], answer: "Controliran" },
+    { prompt: "For a white PDO wine from Vidin, what is the minimum required alcohol level?", options: ["10.0%", "10.5%", "11.0%", "11.5%"], answer: "10.5%" },
+    { prompt: "Which of the following is a key requirement for a wine to be labeled PGI Thracian Lowlands?", options: ["It must be aged in oak for 12 months.", "It must be made from 100% Mavrud.", "It must originate from the Thracian Lowlands and use authorized varieties.", "It must have an alcohol content of at least 13%."], answer: "It must originate from the Thracian Lowlands and use authorized varieties." },
+    { prompt: "The term 'Collection' (Колекционно) on a label suggests what about the wine?", options: ["It is a blend of multiple vintages.", "It is part of a library release from the winery.", "It is a term denoting a high-quality tier, often with extended aging.", "It is a wine sold exclusively at the winery."], answer: "It is a term denoting a high-quality tier, often with extended aging." },
+    { prompt: "What is the maximum planting density specified in the regulations for the PDO Sungurlare?", options: ["2,500 vines/ha", "3,500 vines/ha", "4,500 vines/ha", "5,500 vines/ha"], answer: "4,500 vines/ha" },
+    { prompt: "The modern Bulgarian wine legal framework is fully harmonized with the standards of what governing body?", options: ["The United Nations", "The World Trade Organization", "The European Union", "The International Organisation of Vine and Wine (OIV)"], answer: "The European Union" },
+    { prompt: "A wine simply labeled 'Vino' can be made from grapes grown where?", options: ["Only in the Thracian Lowlands", "Only in the Danube Plain", "Anywhere in Bulgaria or blended with wine from other EU countries", "Only from a registered PDO zone"], answer: "Anywhere in Bulgaria or blended with wine from other EU countries" },
+    { prompt: "Why might a producer choose to label their high-quality wine as PGI instead of PDO?", options: ["PGI wines command higher prices.", "PGI allows more flexibility in grape varieties and winemaking.", "PGI is a higher quality designation than PDO.", "PGI wines have lower taxes."], answer: "PGI allows more flexibility in grape varieties and winemaking." },
+    { prompt: "The official 'cahier des charges' for a PDO specifies what?", options: ["Only the permitted grape varieties.", "Only the maximum yield.", "Every aspect of production, from vineyard to bottle.", "Only the marketing and export regulations."], answer: "Every aspect of production, from vineyard to bottle." },
+    { prompt: "Which white grape is permitted in both the Vidin and Sungurlare PDOs?", options: ["Sauvignon Blanc", "Viognier", "Chardonnay", "Pinot Blanc"], answer: "Chardonnay" },
+    { prompt: "The existence of the two large PGIs is considered controversial because it allows for what?", options: ["Blending of very different terroirs under one generic label.", "Only organic viticulture.", "Producers to ignore yield limits.", "The use of non-vinifera grapes."], answer: "Blending of very different terroirs under one generic label." },
+    { prompt: "What does the term 'First Cask Fill' on a label explicitly indicate?", options: ["The wine is the first of the vintage to be bottled.", "The wine was aged in new oak barrels.", "The wine was fermented in oak.", "The wine is from the oldest vines on the estate."], answer: "The wine was aged in new oak barrels." },
+    { prompt: "Which of these is NOT a permitted white grape variety for PDO Vidin?", options: ["Aligoté", "Rkatsiteli", "Sauvignon Blanc", "Riesling"], answer: "Sauvignon Blanc" },
+    { prompt: "The pre-EU term 'DGO' stood for what?", options: ["Designated Grape Origin", "Declared Geographical Origin", "Distinguished Growers' Organization", "Danubian Grape Ordinance"], answer: "Declared Geographical Origin" },
+    { prompt: "What is the primary goal of setting maximum yield limits like 9,000 kg/ha for PDOs?", options: ["To make harvesting easier", "To encourage quality over quantity", "To reduce the need for irrigation", "To ensure all grapes ripen at the same time"], answer: "To encourage quality over quantity" },
+    { prompt: "If a producer in the Rose Valley makes a wine from a non-permitted grape, what is the highest classification it can achieve?", options: ["PDO Rose Valley", "PGI Thracian Lowlands", "Controliran", "It cannot be classified."], answer: "PGI Thracian Lowlands" },
+    { prompt: "The legal framework for wine in Bulgaria was significantly restructured upon its accession to the EU in what year?", options: ["1999", "2004", "2007", "2010"], answer: "2007" },
+    { prompt: "For a red PDO wine from Sungurlare, which of these grapes is permitted?", options: ["Mavrud", "Gamza", "Syrah", "Rubin"], answer: "Syrah" },
+    { prompt: "Which of the following is a key parameter, besides yields and alcohol, specified in a PDO's product specification?", options: ["The type of bottle to be used", "Minimum total acidity", "The retail price", "The number of medals it has won"], answer: "Minimum total acidity" },
+    { prompt: "The term 'New' on a PGI wine label generally refers to what?", options: ["A wine meant for early consumption", "A wine from a newly planted vineyard", "A wine made with a new experimental technique", "A wine aged in new oak"], answer: "A wine meant for early consumption" },
+    { prompt: "What is the minimum actual alcohol for a white PDO wine from Sungurlare?", options: ["10.0%", "10.5%", "11.0%", "11.5%"], answer: "10.5%" },
+    { prompt: "True or False: A wine labeled 'PGI Danubian Plain' could legally be a blend of Gamza from the north and Mavrud from the south.", options: ["True", "False"], answer: "False" },
+    { prompt: "Which international grape is permitted for red PDO wines in both Vidin and Sungurlare?", options: ["Pinot Noir", "Syrah", "Merlot", "Cabernet Franc"], answer: "Merlot" },
+    { prompt: "The flexibility of the PGI rules was particularly useful for producers doing what?", options: ["Making very high-volume, basic wine", "Experimenting with unusual blends and non-traditional varieties", "Only making sweet wines", "Exporting exclusively to Russia"], answer: "Experimenting with unusual blends and non-traditional varieties" },
+    { prompt: "What does the term 'Специална резерва' translate to?", options: ["Special Reserve", "Single Barrel", "Select Harvest", "Superior Red"], answer: "Special Reserve" },
+    { prompt: "A producer invents a new crossing. What is the highest initial classification a wine made from it could receive?", options: ["PDO", "PGI", "Vino", "Controliran"], answer: "PGI" },
+    { prompt: "The adoption of the EU's legal framework replaced which two older domestic classifications?", options: ["Reserve and Special Reserve", "DGO and Controliran", "Vinprom and Balkantourist", "Classico and Superiore"], answer: "DGO and Controliran" },
+    { prompt: "Which of these is NOT a factor controlled by PDO regulations?", options: ["Permitted grape varieties", "Minimum alcohol level", "Maximum vineyard yields", "The winemaker's salary"], answer: "The winemaker's salary" },
+    { prompt: "If a wine from the Struma Valley is made from 100% Pinot Noir, what is its most likely classification?", options: ["PDO Struma Valley", "PGI Thracian Lowlands", "PDO Melnik", "It cannot be classified."], answer: "PGI Thracian Lowlands" },
+    { prompt: "The term 'Premium' on a PGI label is a quality indicator that is...", options: ["Legally defined with specific aging requirements", "A marketing term with no strict legal definition", "Only usable for red wines", "Reserved for wines that win a gold medal"], answer: "A marketing term with no strict legal definition" },
+    { prompt: "Which of these is a permitted white grape for PDO Sungurlare?", options: ["Pinot Gris", "Gewürztraminer", "Ugni Blanc", "Verdejo"], answer: "Ugni Blanc" }
+];
+
+const grapeQuestionBank = [
+    { prompt: "This flagship indigenous red grape is late-ripening, sensitive to frost, and produces deeply colored, tannic, age-worthy wines with notes of blackberry, mulberry, and spice. It is the pride of the Thracian Lowlands.", options: ["Gamza", "Rubin", "Mavrud", "Shiroka Melnishka Loza"], answer: "Mavrud", geminiData: { type: 'grape', grape: 'Mavrud' } },
+    { prompt: "Exclusively grown in the Struma Valley, this extremely late-ripening red grape yields powerful, spicy wines with notes of tobacco and leather. Its ripening challenges led to the creation of a famous hybrid.", options: ["Melnik 55", "Shiroka Melnishka Loza", "Pamid", "Gamza"], answer: "Shiroka Melnishka Loza", geminiData: { type: 'grape', grape: 'Shiroka Melnishka Loza' } },
+    { prompt: "This successful 1944 crossing was designed to combine the structure and aromatics of its prestigious parents, resulting in a wine often described as 'a man in a suit with cowboy boots'.", options: ["Mavrud x Pinot Noir", "Nebbiolo x Syrah", "Cabernet Sauvignon x Melnik", "Mavrud x Merlot"], answer: "Nebbiolo x Syrah", geminiData: { type: 'grape', grape: 'Rubin' } },
+    { prompt: "What is the primary viticultural weakness of Gamza, the traditional red grape of the Danube Plain?", options: ["Extreme sensitivity to drought", "Inability to ripen in cool climates", "Thick skins leading to excessive tannins", "Thin skins making it highly susceptible to botrytis"], answer: "Thin skins making it highly susceptible to botrytis", geminiData: { type: 'grape', grape: 'Gamza' } },
+    { prompt: "The grape Melnik 55 is also known as Ranna Melnishka Loza ('Early Melnik'). It was created by crossing Shiroka Melnishka Loza with which French variety to ensure earlier ripening?", options: ["Syrah", "Valdiguié", "Cabernet Franc", "Malbec"], answer: "Valdiguié", geminiData: { type: 'grape', grape: 'Melnik 55' } },
+    { prompt: "Despite its name, this pink-skinned grape is the signature variety of the Rose Valley and is used to produce aromatic WHITE wines with notes of rose petal.", options: ["Pamid", "Dimiat", "Red Misket", "Keratsuda"], answer: "Red Misket", geminiData: { type: 'grape', grape: 'Red Misket' } },
+    { prompt: "While Cabernet Sauvignon was once king, which international red variety has now overtaken it to become the most planted grape in Bulgaria?", options: ["Syrah", "Pinot Noir", "Merlot", "Cabernet Franc"], answer: "Merlot", geminiData: { type: 'grape', grape: 'Merlot' } },
+    { prompt: "Which international white variety has proven to produce very high-quality wines in Bulgaria, often vinified with American oak and full malolactic conversion in a style influenced by Californian expertise?", options: ["Sauvignon Blanc", "Chardonnay", "Viognier", "Pinot Gris"], answer: "Chardonnay", geminiData: { type: 'grape', grape: 'Chardonnay' } },
+    { prompt: "This international red grape has grown strongly in popularity, as its flavor profile and heat tolerance are well-suited to the conditions in southern Bulgaria, particularly the Thracian Valley.", options: ["Pinot Noir", "Gamay", "Syrah", "Nebbiolo"], answer: "Syrah", geminiData: { type: 'grape', grape: 'Syrah' } },
+    { prompt: "Which of these white grapes was once a workhorse of the communist era, accounting for a huge portion of plantings, but has since seen its vineyard area dramatically reduced?", options: ["Dimiat", "Rkatsiteli", "Ugni Blanc", "Aligoté"], answer: "Rkatsiteli", geminiData: { type: 'grape', grape: 'Rkatsiteli' } },
+    { prompt: "This ancient, light-bodied indigenous red grape was once widespread but has fallen out of favor for commercial production due to its low acidity and extract, making wines for early consumption.", options: ["Pamid", "Buket", "Evmolpia", "Ruen"], answer: "Pamid", geminiData: { type: 'grape', grape: 'Pamid' } },
+    { prompt: "Which widely planted indigenous white grape is a distant relative of Chardonnay and is known for producing fresh, aromatic, easy-drinking wines for the domestic market?", options: ["Red Misket", "Keratsuda", "Dimiat", "Varnenski Misket"], answer: "Dimiat", geminiData: { type: 'grape', grape: 'Dimiat' } },
+    { prompt: "The planting of international varieties like Cabernet Sauvignon and Merlot was a direct result of economic policy during which era?", options: ["The Ottoman Empire", "The First Bulgarian Empire", "The Post-Liberation Era", "The Communist Era"], answer: "The Communist Era" },
+    { prompt: "Which of these is a successful Bulgarian crossing of Mavrud and Pinot Noir?", options: ["Ruen", "Buket", "Evmolpia", "Storgozia"], answer: "Buket" },
+    { prompt: "Which grape is also known as Kadarka in other Balkan countries?", options: ["Mavrud", "Pamid", "Gamza", "Rubin"], answer: "Gamza" },
+    { prompt: "Which region is the exclusive home of Shiroka Melnishka Loza?", options: ["Danube Plain", "Rose Valley", "Thracian Lowlands", "Struma Valley"], answer: "Struma Valley" },
+    { prompt: "Cabernet Franc is increasingly impressive in Bulgaria. In what capacity is it most often used?", options: ["Only for Rosé production", "As a varietal wine and in blends", "Only for sweet red wines", "As a blending grape for white wines"], answer: "As a varietal wine and in blends" },
+    { prompt: "The crossing 'Ruen' is derived from which two parent grapes?", options: ["Syrah x Nebbiolo", "Cabernet Sauvignon x Shiroka Melnishka Loza", "Mavrud x Merlot", "Pinot Noir x Gamza"], answer: "Cabernet Sauvignon x Shiroka Melnishka Loza" },
+    { prompt: "Which of the following is an important viticultural consideration for Mavrud?", options: ["It ripens very early", "It is highly resistant to frost", "It demands warm sites to reach full maturity", "It has very low tannin levels"], answer: "It demands warm sites to reach full maturity" },
+    { prompt: "Which grape variety's name translates to 'Broad-Leaved Vine of Melnik'?", options: ["Ranna Melnishka Loza", "Shiroka Melnishka Loza", "Melnik 1300", "Rubin"], answer: "Shiroka Melnishka Loza" },
+    { prompt: "Which of these is a key aroma often associated with wines made from Rubin?", options: ["Strawberry and raspberry", "Rose petal and lychee", "Dark berries, plum, and herbs", "Green bell pepper and asparagus"], answer: "Dark berries, plum, and herbs" },
+    { prompt: "The decline in plantings of Gamza is largely attributed to what?", options: ["Its unpopular flavor profile", "Its susceptibility to grey mould (Botrytis)", "A government mandate to plant other grapes", "Its inability to produce sufficient yields"], answer: "Its susceptibility to grey mould (Botrytis)" },
+    { prompt: "Which grape is a crossing of Mavrud and Merlot?", options: ["Buket", "Ruen", "Evmolpia", "Storgozia"], answer: "Evmolpia" },
+    { prompt: "Which international white grape is often used for distillation in Bulgaria?", options: ["Chardonnay", "Sauvignon Blanc", "Ugni Blanc", "Riesling"], answer: "Ugni Blanc" },
+    { prompt: "Tamianka is the Bulgarian name for which aromatic white grape?", options: ["Muscat Ottonel", "Muscat Blanc à Petits Grains", "Gewürztraminer", "Torrontés"], answer: "Muscat Blanc à Petits Grains" },
+    { prompt: "Which of these is an old, low-acid indigenous white grape found in the southwest of Bulgaria?", options: ["Kokorko", "Keratsuda", "Dimiat", "Varnenski Misket"], answer: "Keratsuda" },
+    { prompt: "The quality revolution has seen a renewed focus on which category of grapes?", options: ["Only French international varieties", "Indigenous and locally-developed varieties", "Only high-yield varieties for bulk wine", "Only grapes suitable for distillation"], answer: "Indigenous and locally-developed varieties" },
+    { prompt: "The cross 'Melnik 1300' involves Shiroka Melnishka Loza and which other grape?", options: ["Saperavi", "Valdiguié", "Merlot", "Cabernet Sauvignon"], answer: "Saperavi" },
+    { prompt: "Which grape is known for its elegant, light-to-medium-bodied profile with red fruit and earthy notes, often compared to Gamay?", options: ["Mavrud", "Rubin", "Gamza", "Pamid"], answer: "Gamza" },
+    { prompt: "The dark-skinned variety Storgozia is a cross between Buket and which other grape?", options: ["Villard Blanc", "Seyval Blanc", "Chambourcin", "Baco Noir"], answer: "Villard Blanc" }
+];
+
+const gastronomyQuestionBank = [
+    { prompt: "A diner orders Kapama, a rich, slow-cooked bake of sauerkraut and various meats. Which wine would be the most classic and successful pairing?", options: ["A light, crisp Dimiat", "An aromatic Red Misket", "A robust, tannic Mavrud", "A delicate Gamza"], answer: "A robust, tannic Mavrud", geminiData: { type: 'pairingExplanation', wine: 'Mavrud', dish: 'Kapama' } },
+    { prompt: "What is the traditional role of Rakia in a Bulgarian meal?", options: ["As a digestif served after the meal", "As an apéritif served cold with the starting salad", "Mixed into a cocktail during the main course", "As a dessert spirit served with Banitsa"], answer: "As an apéritif served cold with the starting salad", geminiData: { type: 'pairingExplanation', wine: 'Rakia', dish: 'Shopska Salata' } },
+    { prompt: "Which PDO-protected ingredient is essential for making both a traditional Shopska Salata and the savory pastry Banitsa?", options: ["Lukanka", "Bulgarsko kiselo mlyako (yogurt)", "Lutenitsa", "Bulgarsko byalo salamureno sirene (cheese)"], answer: "Bulgarsko byalo salamureno sirene (cheese)" },
+    { prompt: "What is Pelin?", options: ["A high-proof fruit brandy made from plums", "A traditional aromatized wine infused with wormwood", "A refreshing cold soup made from yogurt and cucumber", "A type of air-dried salami"], answer: "A traditional aromatized wine infused with wormwood" },
+    { prompt: "A guest is enjoying freshly grilled Kyufte and Kebapche. Which wine's spicy, peppery notes would stand up best to the smoky, charred flavors?", options: ["A Sauvignon Blanc from the Black Sea Coast", "A powerful Shiroka Melnishka Loza from the Struma Valley", "A sweet, late-harvest Shiraz", "A traditional method sparkling wine"], answer: "A powerful Shiroka Melnishka Loza from the Struma Valley", geminiData: { type: 'pairingExplanation', wine: 'Shiroka Melnishka Loza', dish: 'Kyufte and Kebapche' } },
+    { prompt: "The refreshing cold soup Tarator, made with yogurt, cucumber, and walnuts, is best paired with what?", options: ["A full-bodied Cabernet Sauvignon", "No beverage is traditionally served", "A crisp, high-acid white wine or more Rakia", "A sweet dessert wine"], answer: "A crisp, high-acid white wine or more Rakia" },
+    { prompt: "Which characteristic of Bulgarian cuisine, rooted in fermentation, creates a bold flavor profile that demands well-structured beverages?", options: ["A focus on subtle, delicate herbs", "The prevalence of acidic, tangy, and savory flavors", "The heavy use of sweet spices like cinnamon", "A preference for deep-fried foods"], answer: "The prevalence of acidic, tangy, and savory flavors" },
+    { prompt: "A concentrated, powerful appassimento-style Mavrud like Zagreus's Vinica would be best enjoyed with what?", options: ["A light green salad", "A delicate poached fish", "Strong, aged hard cheeses or as a contemplative wine on its own", "A Shopska Salata"], answer: "Strong, aged hard cheeses or as a contemplative wine on its own", geminiData: { type: 'pairingExplanation', wine: 'Appassimento Mavrud', dish: 'Aged Cheese' } },
+    { prompt: "What is the most common fruit base for the Rakia known as 'Slivovitsa'?", options: ["Grapes", "Apricots", "Plums", "Roses"], answer: "Plums" },
+    { prompt: "The salty, sharp flavor of Sirene cheese in a Banitsa pastry is beautifully contrasted by which element in a wine?", options: ["Heavy oak and vanilla notes", "High alcohol", "High acidity", "Low acidity and residual sugar"], answer: "High acidity" },
+    { prompt: "Gyulova Rakia is a highly aromatic specialty spirit from the Rose Valley. What is it distilled with?", options: ["Honey", "Sour cherries", "A mix of secret herbs", "Petals of the Kazanlak rose"], answer: "Petals of the Kazanlak rose" },
+    { prompt: "A modern, crisp Sauvignon Blanc from the Black Sea Coast would be an excellent pairing for which Bulgarian dish?", options: ["Kapama", "Kavarma", "A fresh salad with grilled fish from the coast", "Vinen Kebap (beef stew)"], answer: "A fresh salad with grilled fish from the coast", geminiData: { type: 'pairingExplanation', wine: 'Black Sea Coast Sauvignon Blanc', dish: 'Grilled Fish Salad' } },
+    { prompt: "The savory, cumin-spiced air-dried salami 'Lukanka' would find a good partner in which style of wine?", options: ["A light-bodied, fruity red like Gamza", "A very sweet dessert wine", "An off-dry Riesling", "A heavily oaked Chardonnay"], answer: "A light-bodied, fruity red like Gamza" },
+    { prompt: "What is the primary botanical used to flavor Pelin, giving it a characteristic bitter-sweet profile?", options: ["Juniper", "Anise", "Wormwood (Artemisia)", "Rose petals"], answer: "Wormwood (Artemisia)" },
+    { prompt: "A rich, tomato-based stew like Kavarma, served in a clay pot, calls for a wine that can handle its richness and acidity. Which is the best choice?", options: ["A Provence-style Rosé", "A medium-bodied, fruit-forward Merlot", "A delicate sparkling wine", "A simple, unoaked Dimiat"], answer: "A medium-bodied, fruit-forward Merlot", geminiData: { type: 'pairingExplanation', wine: 'Merlot', dish: 'Kavarma' } },
+    { prompt: "The ubiquitous Bulgarian table condiment 'Sharena Sol' (colorful salt) is primarily composed of salt, paprika, and what other key herb?", options: ["Dill", "Mint", "Chubritsa (summer savory)", "Basil"], answer: "Chubritsa (summer savory)" },
+    { prompt: "Which type of Rakia is known as 'Grozdova'?", options: ["Plum Rakia", "Grape Rakia", "Apricot Rakia", "Honey Rakia"], answer: "Grape Rakia" },
+    { prompt: "An elegant, traditional method sparkling wine from a producer like Edoardo Miroglio would be a classic pairing for what occasion or dish?", options: ["A hearty meat stew", "An apéritif with light appetizers", "A spicy grilled sausage", "A heavy dessert"], answer: "An apéritif with light appetizers" },
+    { prompt: "The tangy flavor of 'Bulgarsko kiselo mlyako' (yogurt) is due to which specific bacterial strain?", options: ["Saccharomyces cerevisiae", "Brettanomyces bruxellensis", "Lactobacillus delbrueckii subsp. bulgaricus", "Oenococcus oeni"], answer: "Lactobacillus delbrueckii subsp. bulgaricus" },
+    { prompt: "A modern, pale, Provence-style rosé would be a delightful match for what kind of meal?", options: ["A heavy winter Kapama", "A light summer lunch with salads and grilled vegetables", "A rich, creamy pasta dish", "A spicy curry"], answer: "A light summer lunch with salads and grilled vegetables" },
+    { prompt: "What is Lutenitsa?", options: ["A type of spicy sausage", "A rich spread of roasted red peppers and tomatoes", "A yogurt-based cold soup", "A phyllo dough pastry"], answer: "A rich spread of roasted red peppers and tomatoes" },
+    { prompt: "Which term describes homemade Rakia, which is often double-distilled and significantly stronger than commercial versions?", options: ["Grozdova", "Domashna", "Medena", "Bilkova"], answer: "Domashna" },
+    { prompt: "The pairing of a high-tannin wine like Shiroka Melnishka Loza with grilled meat like Kebapche works because the tannins...", options: ["Are softened by the meat's fat and protein", "Amplify the smoky flavor", "Clash with the spices", "Are neutralized by the char"], answer: "Are softened by the meat's fat and protein" },
+    { prompt: "What does the term 'Medena' signify when applied to Rakia?", options: ["It is infused with herbs", "It is made from apricots", "It is infused with honey", "It is the strongest type"], answer: "It is infused with honey" },
+    { prompt: "A light, earthy, red-fruited Gamza would be an excellent counterpoint to which of the following?", options: ["A rich, layered Kapama", "A charcuterie board with Lukanka and other cured meats", "A creamy seafood dish", "A very spicy chili"], answer: "A charcuterie board with Lukanka and other cured meats" },
+    { prompt: "The tradition of drinking Rakia with Shopska salad is an example of what kind of pairing principle?", options: ["Congruent pairing (like with like)", "High-contrast pairing (opposites attract)", "Sweet with sweet", "No specific principle"], answer: "High-contrast pairing (opposites attract)" },
+    { prompt: "A dessert wine made from air-dried grapes, like some from Villa Melnik, would be best paired with what?", options: ["Grilled steak", "A salty salad", "A not-too-sweet dessert based on nuts or blue cheese", "Spicy sausages"], answer: "A not-too-sweet dessert based on nuts or blue cheese" },
+    { prompt: "What is 'Bilkova' Rakia?", options: ["Rose-petal Rakia", "Plum Rakia", "Herb-infused Rakia", "Sour cherry Rakia"], answer: "Herb-infused Rakia" },
+    { prompt: "The national dish 'Bob Chorba' (a hearty bean soup) would pair well with which wine?", options: ["A simple, fruity, unoaked red wine", "A complex, aged sparkling wine", "A sweet botrytized wine", "A high-alcohol fortified wine"], answer: "A simple, fruity, unoaked red wine" },
+    { prompt: "Why is an aromatic white like Red Misket a good pairing for a slightly salty pastry like Banitsa?", options: ["The wine's tannins cut the fat", "The wine's sweetness cancels the salt", "The wine's floral aromatics and acidity provide a refreshing contrast", "The wine's oak notes complement the pastry"], answer: "The wine's floral aromatics and acidity provide a refreshing contrast" },
+    { prompt: "The term 'Gyuveche' refers to what in Bulgarian cuisine?", options: ["A type of spicy sausage", "The individual clay pot used for cooking stews", "A summer savory herb blend", "A layered meat and sauerkraut bake"], answer: "The individual clay pot used for cooking stews" },
+    { prompt: "A bold, structured Rubin, with its mix of Nebbiolo and Syrah character, would be a great match for...", options: ["Poached chicken breast", "A simple green salad", "A rich, savory beef stew like Vinen Kebap", "Oysters on the half shell"], answer: "A rich, savory beef stew like Vinen Kebap" },
+    { prompt: "What is 'Kiselo Zele'?", options: ["Spicy sausage", "Sauerkraut (fermented cabbage)", "Bulgarian yogurt", "Colorful salt"], answer: "Sauerkraut (fermented cabbage)" },
+    { prompt: "A late-harvest, sweet Shiraz from a producer like Katarzyna Estate would pair best with:", options: ["Shopska Salata", "Grilled meats", "Dark chocolate desserts or blue cheese", "Spicy vegetable stir-fry"], answer: "Dark chocolate desserts or blue cheese" },
+    { prompt: "The 'skara' is central to Bulgarian cuisine. What is it?", options: ["A type of stew", "A grill for cooking meats", "A fermentation vessel", "A type of bread"], answer: "A grill for cooking meats" },
+    { prompt: "Which of these is NOT a typical ingredient in a Shopska Salata?", options: ["Tomatoes", "Cucumbers", "Lettuce", "Sirene cheese"], answer: "Lettuce" },
+    { prompt: "The fiery, clean nature of Rakia is considered a perfect foil for what components in the traditional starting salad?", options: ["The sweetness of the tomatoes", "The bitterness of the peppers", "The crisp vegetables and salty cheese", "The earthiness of the onions"], answer: "The crisp vegetables and salty cheese" },
+    { prompt: "What is 'Vishnovka'?", options: ["Rakia infused with sour cherries", "Rakia made from pears", "Rakia flavored with anise", "Rakia aged in oak barrels"], answer: "Rakia infused with sour cherries" },
+    { prompt: "An 'orange wine' from a producer like Villa Melnik, with its added texture and phenolics, could stand up to what kind of dish?", options: ["A simple piece of grilled white fish", "A hearty dish with garlic, herbs, and maybe some cured meat", "A very light, citrusy ceviche", "A sweet fruit tart"], answer: "A hearty dish with garlic, herbs, and maybe some cured meat" },
+    { prompt: "The dominant flavor profile of Bulgarian cuisine can be described as:", options: ["Sweet and spicy", "Subtle and delicate", "Bold, acidic, and savory", "Mild and creamy"], answer: "Bold, acidic, and savory" },
+    { prompt: "What is the most common base for commercial Rakia production?", options: ["Apples", "Pears", "Grapes", "Cherries"], answer: "Grapes" },
+    { prompt: "A classic 'Vinen Kebap' is a beef stew made with what key liquid?", options: ["White wine", "Beer", "Red wine", "Rakia"], answer: "Red wine" },
+    { prompt: "The high acidity in many Bulgarian white wines makes them a good match for the country's dairy products because...", options: ["It cancels out the flavor of the cheese", "It cuts through the richness and fat of cheese and yogurt", "It makes the dairy taste sweeter", "It has no effect on the pairing"], answer: "It cuts through the richness and fat of cheese and yogurt" },
+    { prompt: "Which of these is a spicy, air-dried salami-like sausage?", options: ["Kebapche", "Kyufte", "Lukanka", "Sirene"], answer: "Lukanka" },
+    { prompt: "Pelin's bitter-sweet and herbal character makes it suitable for serving as...", options: ["A main course beverage", "A breakfast drink", "An apéritif or digestif", "A mixer for cocktails only"], answer: "An apéritif or digestif" },
+    { prompt: "A modern, oaked Chardonnay from Bulgaria would pair well with what dish?", options: ["A simple salad with vinaigrette", "A grilled chicken or pork dish with a creamy sauce", "A very spicy curry", "A tomato-based pasta"], answer: "A grilled chicken or pork dish with a creamy sauce" },
+    { prompt: "What is the key difference between Kyufte and Kebapche?", options: ["Kyufte is pork, Kebapche is beef", "Kyufte is spicy, Kebapche is mild", "Kyufte is a round meatball, Kebapche is a skinless sausage shape", "Kyufte is fried, Kebapche is baked"], answer: "Kyufte is a round meatball, Kebapche is a skinless sausage shape" },
+    { prompt: "The national spirit, Rakia, has a documented history of production dating back to at least which century?", options: ["15th century", "13th century", "11th century", "9th century"], answer: "11th century" },
+    { prompt: "Which two PDO-protected products form the base of the cold soup Tarator?", options: ["Sirene and Lutenitsa", "Kiselo Mlyako and Sirene", "Lukanka and Chubritsa", "Kiselo Mlyako and Cucumbers (though cucumbers are not PDO)"], answer: "Kiselo Mlyako and Cucumbers (though cucumbers are not PDO)" },
+    { prompt: "The celebratory dish Kapama is particularly famous in which mountainous region of Bulgaria?", options: ["The Rhodope Mountains", "The Balkan Mountains", "The Pirin Mountains (Bansko region)", "The Rila Mountains"], answer: "The Pirin Mountains (Bansko region)" }
+];
+
+const terroirQuestionBank = [
+    { prompt: "Which major mountain range acts as a crucial climatic barrier, shielding southern Bulgaria from cold northern winds?", options: ["Rhodope Mountains", "Pirin Mountains", "Balkan Mountains (Stara Planina)", "Rila Mountains"], answer: "Balkan Mountains (Stara Planina)" },
+    { prompt: "The Thracian Lowlands are dominated by which primary soil type, known for its reddish-brown color and high iron content?", options: ["Chernozems", "Smolnitsas", "Cinnamonic Forest Soils (Luvisols)", "Alluvial Sands"], answer: "Cinnamonic Forest Soils (Luvisols)" },
+    { prompt: "Which region is the warmest and sunniest, with a climate strongly influenced by the Aegean Sea?", options: ["Danube Plain", "Black Sea Coast", "Rose Valley", "Struma Valley"], answer: "Struma Valley" },
+    { prompt: "The philosophy of 'dry farming,' practiced by terroir-focused producers like Abdyika, involves what?", options: ["Using sprinklers to mimic rainfall", "Planting only in riverbeds", "Deliberately not irrigating vineyards", "Covering vineyards to protect from rain"], answer: "Deliberately not irrigating vineyards" },
+    { prompt: "Chernozem soils, or 'black earth,' are known for their exceptional fertility and are most characteristic of which region?", options: ["Thracian Lowlands", "Danube Plain", "Struma Valley", "Rose Valley"], answer: "Danube Plain" },
+    { prompt: "What is the primary viticultural risk in the Danube Plain, which has influenced site selection and the choice of training systems?", options: ["Excessive rainfall", "Summer drought", "Severe winter frost", "Volcanic activity"], answer: "Severe winter frost" },
+    { prompt: "The presence of what geological feature significantly enhances the quality potential of Cinnamonic Forest soils by improving drainage and aromatic complexity?", options: ["Granite", "Limestone", "Volcanic tuff", "Slate"], answer: "Limestone" },
+    { prompt: "The 'modernist' approach to winemaking in Bulgaria, exemplified by estates like Bessa Valley, is heavily influenced by the techniques of which famous wine region?", options: ["Burgundy", "Tuscany", "Bordeaux", "Mosel"], answer: "Bordeaux" },
+    { prompt: "Which region benefits from a milder, maritime climate with long, gentle autumns, making it ideal for aromatic white varieties?", options: ["Struma Valley", "Rose Valley", "Danube Plain", "Black Sea Coast"], answer: "Black Sea Coast" },
+    { prompt: "The revival of traditional, low-intervention winemaking has seen some producers experimenting with fermentation and aging in what type of ancient vessel?", options: ["Concrete eggs", "Stainless steel tanks", "New French oak barriques", "Amphorae and stone tanks"], answer: "Amphorae and stone tanks" },
+    { prompt: "What is the name for the heavy, black, clay-rich soils (Vertisols) found in the Danube Plain that crack deeply when dry?", options: ["Luvisols", "Chernozems", "Smolnitsas", "Alluvium"], answer: "Smolnitsas" },
+    { prompt: "The adoption of high-density planting (e.g., 4,000+ vines/ha) in modern vineyards aims to achieve what?", options: ["Increase yield per vine", "Make mechanical harvesting easier", "Encourage competition between vines for more concentrated grapes", "Reduce the need for pruning"], answer: "Encourage competition between vines for more concentrated grapes" },
+    { prompt: "Which of the five traditional regions is located in the 'Sub-Balkan' area, nestled just south of the main mountain range?", options: ["Struma Valley", "Thracian Lowlands", "Rose Valley", "Black Sea Coast"], answer: "Rose Valley" },
+    { prompt: "The viticultural risk of Botrytis cinerea (grey mould) is a particular concern for which thin-skinned grape variety?", options: ["Cabernet Sauvignon", "Mavrud", "Gamza", "Rubin"], answer: "Gamza" },
+    { prompt: "The Gobelet (bush vine) training system is being revived by some quality-focused producers because it is believed to offer what benefit in hot climates?", options: ["Better sun and wind protection for the grapes", "Higher yields per vine", "Easier mechanization", "Better resistance to frost"], answer: "Better sun and wind protection for the grapes" },
+    { prompt: "Bulgaria's latitude positions it parallel to which two famous European wine regions?", options: ["Champagne and the Loire Valley", "Rioja and the Douro Valley", "Bordeaux and Tuscany", "Alsace and Baden"], answer: "Bordeaux and Tuscany" },
+    { prompt: "What is the primary influence moderating the climate of the Black Sea Coast region?", options: ["The Balkan Mountains", "The Aegean Sea", "The Black Sea", "The Danube River"], answer: "The Black Sea" },
+    { prompt: "The 'Bordeaux benchmark' style of winemaking in Bulgaria typically involves aging in what type of vessel?", options: ["Large, neutral oak casks", "Stainless steel tanks", "Small, 225-liter French oak barriques", "Clay amphorae"], answer: "Small, 225-liter French oak barriques" },
+    { prompt: "What is the most significant challenge posed by Chernozem and Smolnitsa soils for viticulture?", options: ["Poor water retention", "Low mineral content", "Excessive fertility can lead to overly vigorous growth", "High pH, leading to alkaline conditions"], answer: "Excessive fertility can lead to overly vigorous growth" },
+    { prompt: "The investment by Count Stephan von Neipperg in Bessa Valley was largely due to the similarity of its soils to which prestigious appellation?", options: ["Pauillac", "Saint-Émilion", "Barolo", "Côte-Rôtie"], answer: "Saint-Émilion" },
+    { prompt: "What is the typical elevation range for most Bulgarian vineyards?", options: ["Below 50 meters", "100 to 500 meters", "500 to 1000 meters", "Above 1000 meters"], answer: "100 to 500 meters" },
+    { prompt: "The 'traditionalist' or terroir-driven approach often favors using oak from what origin?", options: ["American", "Hungarian", "Slavonian", "Bulgarian"], answer: "Bulgarian" },
+    { prompt: "Which of these is NOT one of the three primary viticultural risks in Bulgaria?", options: ["Summer Drought", "Severe Winter Frost", "Fungal Diseases (e.g., Botrytis)", "Excessive spring rainfall"], answer: "Excessive spring rainfall" },
+    { prompt: "The soils of the Struma Valley, well-suited to the Melnik varieties, are best described as:", options: ["Heavy clay", "Volcanic basalt", "Light, sandy, and sometimes alluvial", "Pure limestone"], answer: "Light, sandy, and sometimes alluvial" },
+    { prompt: "The use of microvinification (fermenting individual parcels in separate small tanks) is a hallmark of which approach?", options: ["The Traditionalist Approach", "The Organic Approach", "The Modernist Approach", "The Biodynamic Approach"], answer: "The Modernist Approach" },
+    { prompt: "Bulgaria's GDD values (1550-1900) place its main growing regions in which Winkler Regions?", options: ["Region I to II", "Region II to III", "Region III to IV", "Region IV to V"], answer: "Region III to IV" },
+    { prompt: "The philosophy of using drip irrigation, as seen at estates like Katarzyna, is based on what principle?", options: ["Risk mitigation and ensuring consistent ripeness", "Increasing yields to the legal maximum", "Following ancient Roman practices", "Reducing the need for fertilizer"], answer: "Risk mitigation and ensuring consistent ripeness" },
+    { prompt: "Which of the five traditional regions accounts for the largest share of Bulgaria's vineyards (approx. 35%)?", options: ["Danube Plain", "Struma Valley", "Thracian Lowlands", "Black Sea Coast"], answer: "Thracian Lowlands" },
+    { prompt: "The Cordon de Royat and Moser training systems are popular on modern estates primarily because they...", options: ["Are the oldest traditional systems", "Are well-suited to mechanization and canopy management", "Require no pruning", "Produce the highest possible alcohol levels"], answer: "Are well-suited to mechanization and canopy management" },
+    { prompt: "A winemaker choosing to use spontaneous fermentation with ambient yeasts is following which philosophy?", options: ["The Modernist / Bordeaux model", "The High-Yield model", "The Traditionalist / Terroir-Driven model", "The Cooperative model"], answer: "The Traditionalist / Terroir-Driven model" },
+    { prompt: "Which of the following best describes the climate of the Rose Valley?", options: ["Mild and maritime", "Warm and Mediterranean", "Cool and Alpine", "Continental with hot, dry summers"], answer: "Continental with hot, dry summers" },
+    { prompt: "The reddish-brown color of Cinnamonic Forest soils is derived from their high content of what element?", options: ["Copper", "Magnesium", "Iron", "Calcium"], answer: "Iron" },
+    { prompt: "What is the primary benefit of limestone in a vineyard's soil profile?", options: ["It retains a large amount of water", "It provides excellent drainage and preserves acidity", "It naturally repels all pests", "It warms the soil significantly"], answer: "It provides excellent drainage and preserves acidity" },
+    { prompt: "The development of crossings like Rubin and Melnik 55 demonstrates a long-standing tradition of what in Bulgaria?", options: ["Importing foreign winemakers", "Scientific viticultural research and innovation", "Only growing grapes that require no irrigation", "Adhering strictly to ancient methods"], answer: "Scientific viticultural research and innovation" },
+    { prompt: "Which of the five traditional regions is NOT part of the Thracian Lowlands PGI?", options: ["Struma Valley", "Rose Valley", "Black Sea Coast", "Danube Plain"], answer: "Danube Plain" },
+    { prompt: "The decision to practice dry farming is based on the belief that it forces the vine to do what?", options: ["Produce more leaves for photosynthesis", "Ripen its fruit much faster", "Develop a deep and extensive root system", "Grow smaller, more manageable clusters"], answer: "Develop a deep and extensive root system" },
+    { prompt: "Which region's terroir is defined by being the exclusive home of a grape variety that has been unsuccessful everywhere else?", options: ["Rose Valley", "Danube Plain", "Struma Valley", "Black Sea Coast"], answer: "Struma Valley" },
+    { prompt: "The production of 'orange wines' involves what vinification technique?", options: ["Fermenting red grapes like white grapes", "Adding orange peels for flavor", "Fermenting white grapes on their skins like red grapes", "Aging the wine in orange-colored clay pots"], answer: "Fermenting white grapes on their skins like red grapes" },
+    { prompt: "Which morphotectonic unit defines the geology of southern Bulgaria?", options: ["The Moesian platform", "The Balkan Mountains zone", "The Rhodope massif", "The Sredna Gora zone"], answer: "The Rhodope massif" },
+    { prompt: "A wine with a profile of soft tannins and bright, fruit-forward red fruit is most likely from which soil type and region?", options: ["Cinnamonic soils in the Thracian Lowlands", "Chernozem soils in the Danube Plain", "Sandy soils in the Struma Valley", "Alluvial soils on the Black Sea Coast"], answer: "Chernozem soils in the Danube Plain" },
+    { prompt: "The 'lost decade' of the 1990s had what major impact on Bulgaria's terroir and vineyards?", options: ["Massive new plantings were established", "Widespread vineyard dereliction due to fragmented land restitution", "A government-funded irrigation project for the whole country", "The complete eradication of international varieties"], answer: "Widespread vineyard dereliction due to fragmented land restitution" },
+    { prompt: "The climate of the Thracian Lowlands is best described as:", options: ["Purely Mediterranean", "Temperate continental with a distinct Mediterranean influence", "Cool continental with harsh winters", "Humid and subtropical"], answer: "Temperate continental with a distinct Mediterranean influence" },
+    { prompt: "The use of extended maceration (up to 30 days) is a technique used by modern producers for what purpose?", options: ["To reduce the alcohol content", "To extract more color, flavor, and tannins for structure", "To speed up the fermentation process", "To minimize the need for aging"], answer: "To extract more color, flavor, and tannins for structure" },
+    { prompt: "The historical division of Bulgaria into five wine regions in 1960 was based on what?", options: ["Political boundaries", "The number of wineries in each area", "Scientific analysis of climate and geography", "The demands of the export market"], answer: "Scientific analysis of climate and geography" },
+    { prompt: "Which region's terroir is most suitable for producing elegant, lighter-bodied red wines like Gamza?", options: ["Struma Valley", "Thracian Lowlands", "Danube Plain", "Sakar Mountain"], answer: "Danube Plain" },
+    { prompt: "The producer-led quality model in Bulgaria is a direct consequence of what historical event?", options: ["The phylloxera epidemic", "The adoption of Christianity", "The collapse of the communist system and its industrial focus", "The influence of Roman rule"], answer: "The collapse of the communist system and its industrial focus" },
+    { prompt: "Which of the following is NOT a characteristic of the 'Traditionalist / Terroir-Driven' vinification spectrum?", options: ["Use of ambient yeasts", "Fermentation in amphorae", "Heavy reliance on new French oak for flavor", "Focus on indigenous grape varieties"], answer: "Heavy reliance on new French oak for flavor" },
+    { prompt: "Bulgaria's overall climate is positioned between which two major climate belts?", options: ["Maritime and Arctic", "Tropical and Desert", "Temperate continental and Mediterranean", "Equatorial and Subtropical"], answer: "Temperate continental and Mediterranean" },
+    { prompt: "The success of producers in making world-class Bordeaux blends provided the foundation for what more recent movement?", options: ["A return to high-yield farming", "A focus on producing only bulk wine", "The rediscovery and elevation of indigenous grapes and specific terroirs", "A complete abandonment of international varieties"], answer: "The rediscovery and elevation of indigenous grapes and specific terroirs" },
+    { prompt: "The shrink-swell behavior of Smolnitsa soils can pose what challenge in the vineyard?", options: ["It makes the soil too acidic", "It can make root penetration difficult and vineyard management challenging", "It drains water too quickly", "It reflects too much sunlight onto the vines"], answer: "It can make root penetration difficult and vineyard management challenging" }
+];
+
+const marketQuestionBank = [
+    { prompt: "Which producer, co-owned by Bordeaux's Count Stephan von Neipperg, established an early benchmark for modern quality with its flagship 'Enira Reserva'?", options: ["Katarzyna Estate", "Angel's Estate", "Bessa Valley", "Villa Melnik"], answer: "Bessa Valley", geminiData: { type: 'tastingNote', producer: "Bessa Valley", wine: "Enira Reserva", vintage: "2016 (an excellent vintage)", composition: "Merlot, Syrah, Petit Verdot, and Cabernet Sauvignon" } },
+    { prompt: "Zagreus Winery, a pioneer in organic viticulture, is famous for an innovative, highly-praised Mavrud made using the appassimento technique. What is this wine called?", options: ["Stallion", "Vinica", "Grand Cru", "Pitos"], answer: "Vinica", geminiData: { type: 'tastingNote', producer: "Zagreus Winery", wine: "Vinica Mavrud", vintage: "2019 (a very good vintage)", composition: "100% Mavrud (using dried grapes)" } },
+    { prompt: "Which of the following is considered a 'Rising Star' boutique winery, known for championing local grapes like Shiroka Melnishka Loza in the Struma Valley?", options: ["Domaine Boyar", "Villa Yambol", "Villa Melnik", "Lovico Suhindol"], answer: "Villa Melnik" },
+    { prompt: "The flagship cuvée 'Stallion' from Angel's Estate is typically what style of wine?", options: ["A varietal Mavrud", "A traditional method sparkling wine", "A Bordeaux-style blend", "A light-bodied Gamza"], answer: "A Bordeaux-style blend" },
+    { prompt: "Which of the following producers is best described as a 'Value Champion', proving that high quality can be achieved at a large scale?", options: ["Dragomir Winery", "Rossidi Winery", "Villa Yambol", "Santa Sarah"], answer: "Villa Yambol" },
+    { prompt: "The 2014 vintage in Bulgaria is widely regarded as what?", options: ["Excellent, one of the best of the decade", "Average, with good quality but nothing special", "Poor to Fair, the 'worst vintage in three decades' due to bad weather", "Good for reds, but poor for whites"], answer: "Poor to Fair, the 'worst vintage in three decades' due to bad weather" },
+    { prompt: "According to 2023 export data, which country is the largest market by value for Bulgarian wine?", options: ["United Kingdom", "Germany", "Russia", "Poland"], answer: "Poland" },
+    { prompt: "The initial 'Bordeaux benchmark' approach of modern producers was a strategy to gain credibility in which markets?", options: ["The domestic Bulgarian market", "The former Soviet Union market", "Western markets like the UK and USA", "The Asian market"], answer: "Western markets like the UK and USA" },
+    { prompt: "Which leading expert has extensively chronicled Bulgaria's modern wine revolution and authored 'The Wines of Bulgaria, Romania and Moldova'?", options: ["Robert Parker", "Jancis Robinson MW", "Caroline Gilby MW", "Neal Martin"], answer: "Caroline Gilby MW" },
+    { prompt: "A wine from the 2016 or 2012 vintage is likely to be of what quality?", options: ["Poor and best consumed quickly", "Average and suitable for early drinking", "Excellent, from a powerful and age-worthy vintage", "Good for whites only"], answer: "Excellent, from a powerful and age-worthy vintage" },
+    { prompt: "Which producer, founded by the creator of Belvedere vodka, is known for its large-scale, technologically advanced winery in the Sakar Mountain sub-region?", options: ["Bessa Valley", "Katarzyna Estate", "Zagreus Winery", "Dragomir Winery"], answer: "Katarzyna Estate" },
+    { prompt: "The shift in focus from mass production for the USSR to quality production for Western markets was a direct result of what historical event?", options: ["Bulgaria's entry into the EU", "The phylloxera crisis", "The collapse of the Soviet Union in 1989", "The founding of the Pleven Institute"], answer: "The collapse of the Soviet Union in 1989" },
+    { prompt: "Which of these is NOT considered one of the 'Benchmark Estates' that defined the top echelon of modern Bulgarian wine?", options: ["Bessa Valley", "Angel's Estate", "Katarzyna Estate", "Domaine Boyar"], answer: "Domaine Boyar" },
+    { prompt: "The growing demand for authenticity and uniqueness in export markets is the primary driving force behind what current trend in Bulgarian wine?", options: ["The increase in production of bulk wine", "The renaissance of indigenous varieties like Mavrud and Melnik", "The exclusive focus on Bordeaux blends", "The abandonment of quality control"], answer: "The renaissance of indigenous varieties like Mavrud and Melnik" },
+    { prompt: "Which major international wine competition consistently awards top honors, including Grand Gold medals, to Bulgarian producers like Villa Yambol and Rumelia?", options: ["The Judgement of Paris", "Concours Mondial de Bruxelles (CMB)", "The International Wine Challenge (IWC)", "The Great American Wine Competition"], answer: "Concours Mondial de Bruxelles (CMB)" },
+    { prompt: "Which of these is a boutique winery founded by two experienced oenologists, focusing on small-batch, high-end wines like 'Pitos'?", options: ["Villa Melnik", "Zagreus Winery", "Dragomir Winery", "Domaine Boyar"], answer: "Dragomir Winery" },
+    { prompt: "Which of the following countries is NOT in the top 5 export markets for Bulgarian wine by value as of 2023?", options: ["Sweden", "United Kingdom", "Czechia", "United States"], answer: "United Kingdom" },
+    { prompt: "The 'lost decade' of the 1990s had what effect on Bulgaria's market share in the West?", options: ["It caused it to increase dramatically", "It had no effect", "It caused Bulgaria to rapidly lose market share due to inconsistent quality", "It made Bulgaria the number one exporter to the UK"], answer: "It caused Bulgaria to rapidly lose market share due to inconsistent quality" },
+    { prompt: "Which producer is known for pioneering a 'garage wine' approach, seeking out the best parcels of land for small-batch production?", options: ["Count Stephan von Neipperg", "Christoph Trilynski", "Ivaylo Genowski (Santa Sarah)", "Marko Vachkov"], answer: "Ivaylo Genowski (Santa Sarah)" },
+    { prompt: "The 2018 vintage was noted as being particularly favorable for what style of wine?", options: ["Powerful, tannic red wines", "Sweet, botrytized wines", "High-quality white varieties", "Light-bodied rosé wines"], answer: "High-quality white varieties" },
+    { prompt: "What is the primary production focus of 'Rising Star' wineries like Rossidi and Orbelia?", options: ["Bulk wine for the domestic market", "Inexpensive varietals for supermarkets", "Distinctive wines expressing terroir, from both local and international grapes", "Only sparkling wine production"], answer: "Distinctive wines expressing terroir, from both local and international grapes" },
+    { prompt: "The success of wines like 'Enira Reserva' and 'Stallion' in the early 2000s was crucial for what reason?", options: ["They were the cheapest wines on the market", "They proved Bulgaria could produce wines that met global quality standards", "They were made from 100% unknown grapes", "They were only sold in Bulgaria"], answer: "They proved Bulgaria could produce wines that met global quality standards" },
+    { prompt: "Which historic producer, now considered a 'Value Champion', successfully modernized after the post-communist transition and produces the 'Platinum' Chardonnay?", options: ["Lovico Suhindol", "Domaine Boyar", "Vinprom", "Bessa Valley"], answer: "Domaine Boyar" },
+    { prompt: "The 2009 vintage is best described as:", options: ["Cool and wet, leading to lean wines", "A standout year producing ripe, powerful, and critically acclaimed reds", "An average year with no defining characteristics", "A disastrous year with widespread frost"], answer: "A standout year producing ripe, powerful, and critically acclaimed reds" },
+    { prompt: "The current market strategy for Bulgarian wine exports is best described as:", options: ["Total reliance on the Russian market", "Focusing only on the domestic market", "Diversification across multiple markets like Poland, Sweden, and the US", "Exporting only to other Balkan countries"], answer: "Diversification across multiple markets like Poland, Sweden, and the US" },
+    { prompt: "A wine from which of these vintages would be the riskiest purchase in terms of quality?", options: ["2016", "2017", "2014", "2015"], answer: "2014" },
+    { prompt: "What does the producer-led quality hierarchy in Bulgaria mean for the consumer?", options: ["The region is more important than the producer name", "The producer's reputation is a primary indicator of quality", "All wines from a region are the same quality", "The vintage does not matter"], answer: "The producer's reputation is a primary indicator of quality" },
+    { prompt: "Which of these is NOT a flagship cuvée from a benchmark Bulgarian estate?", options: ["Enira Reserva (Bessa Valley)", "Stallion (Angel's Estate)", "Vinica (Zagreus Winery)", "Shopska Salata (National Dish)"], answer: "Shopska Salata (National Dish)" },
+    { prompt: "The modern quality revolution, which began in the early 2000s, was catalyzed by domestic ambition and what other crucial factor?", options: ["A government mandate", "Foreign investment and EU pre-accession funds", "A series of exceptionally good vintages", "A sudden drop in grape prices"], answer: "Foreign investment and EU pre-accession funds" },
+    { prompt: "Which critic famously praised Zagreus Winery's Vinica Mavrud, highlighting the sophistication of the modern industry?", options: ["Jancis Robinson MW", "Stephen Tanzer", "Antonio Galloni", "James Suckling"], answer: "Jancis Robinson MW" }
+];
+
+
+const gameData = {
+    modules: [
+        {
+            id: 'history',
+            title: "The Historian's Scroll",
+            description: "Arrange key events in their correct chronological order.",
+            type: 'timeline',
+            questions: [
+                {
+                    prompt: "Chronicle the ancient foundations of Bulgarian wine, from Thracian reverence to the early influence of empires.",
+                    items: [
+                        { id: 1, text: "The Panagyurishte Treasure, a solid gold wine set, provides tangible proof of a sophisticated Thracian wine culture.", answer: -350 }, // 4th-3rd Century BC
+                        { id: 2, text: "Roman Emperor Antonius Pius issues a decree to protect vineyards in Lower Misia (modern Northern Bulgaria).", answer: 150 }, // c. 138-161 CE
+                        { id: 3, text: "The adoption of Christianity as the state religion inextricably links wine to religious liturgy.", answer: 864 },
+                        { id: 4, text: "The Ottoman rule begins, during which wine production is tolerated for the Christian population.", answer: 1396 } // Late 14th Century
+                    ]
+                },
+                {
+                    prompt: "The period after liberation from the Ottomans was one of both crisis and modernization. Arrange these pivotal events.",
+                    items: [
+                        { id: 1, text: "Bulgaria is liberated from the Ottoman Empire, beginning a period of rapid growth for the wine industry.", answer: 1878 },
+                        { id: 2, text: "Phylloxera is first detected in the Vidin region, threatening to devastate the nation's vineyards.", answer: 1884 },
+                        { id: 3, text: "The Pleven Institute of Viticulture and Oenology is established based on the work of French expert Pierre Viala.", answer: 1902 },
+                        { id: 4, text: "Marko Vachkov founds the Suhindol cooperative, the first of its kind on the Balkan Peninsula.", answer: 1909 }
+                    ]
+                },
+                {
+                    prompt: "The post-WWII era was defined by state control and production for the Soviet bloc. Arrange these events from the communist period in chronological order.",
+                    items: [
+                        { id: 1, text: "The state monopoly Vinprom is established, consolidating control over all commercial production.", answer: 1949 },
+                        { id: 2, text: "A government decree officially divides Bulgaria into five distinct viticultural regions.", answer: 1960 },
+                        { id: 3, text: "Bulgaria becomes the world's 4th largest exporter of bottled wine, fueled by demand from the Soviet Union.", answer: 1985 }, // c. 1980s
+                        { id: 4, text: "Mikhail Gorbachev's anti-alcohol campaign in the USSR leads to the uprooting of many Bulgarian vineyards.", answer: 1986 } // c. mid-1980s
+                    ]
+                },
+                {
+                    prompt: "The end of communism triggered a period of immense challenge and the first signs of a quality-focused rebirth. Order these events.",
+                    items: [
+                        { id: 1, text: "The fall of the Berlin Wall causes the collapse of the state-run wine industry and its primary export market.", answer: 1989 },
+                        { id: 2, text: "The 'lost decade' begins, marked by a chaotic land restitution process that leads to vineyard fragmentation and dereliction.", answer: 1990 },
+                        { id: 3, text: "The SAPARD program begins providing crucial pre-accession EU funds, enabling winery modernization.", answer: 2000 },
+                        { id: 4, text: "Bulgaria officially joins the European Union, cementing its integration into the modern European wine market.", answer: 2007 }
+                    ]
+                },
+                {
+                    prompt: "The modern quality revolution was driven by key figures and visionary estates. Place the founding of these benchmarks in the correct order.",
+                    items: [
+                        { id: 1, text: "Ivaylo Genowski founds Santa Sarah, pioneering a 'garage wine' approach focused on small-batch quality.", answer: 1995 }, // c. 1990s
+                        { id: 2, text: "Count Stephan von Neipperg brings Bordeaux expertise and investment, founding Bessa Valley.", answer: 2001 },
+                        { id: 3, text: "The 'Enira' brand is launched by Bessa Valley, quickly becoming an early benchmark for modern quality.", answer: 2002 },
+                        { id: 4, text: "Christoph Trilynski founds the large, technologically advanced Katarzyna Estate in the Sakar Mountain sub-region.", answer: 2004 }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'terroir',
+            title: "The Terroir Architect",
+            description: "Test your knowledge of Bulgarian geography, climate, and soil.",
+            type: 'multiple-choice',
+            questions: [] // This will be populated dynamically
+        },
+        {
+            id: 'grapes',
+            title: "The Ampelographer's Challenge",
+            description: "Test your knowledge of Bulgaria's indigenous and international grape varieties.",
+            type: 'multiple-choice',
+            questions: [] // This will be populated dynamically
+        },
+        {
+            id: 'law',
+            title: "The Lawmaker's Desk",
+            description: "Navigate the complexities of Bulgarian wine law and labeling.",
+            type: 'multiple-choice',
+            questions: [] // This will be populated dynamically
+        },
+        {
+            id: 'gastronomy',
+            title: "The Gastronome's Table",
+            description: "Master the art of pairing Bulgarian wine with its classic cuisine.",
+            type: 'multiple-choice',
+            questions: [] // This will be populated dynamically
+        },
+        {
+            id: 'market',
+            title: "The Critic's Corner",
+            description: "Identify key producers, vintages, and market trends.",
+            type: 'multiple-choice',
+            questions: [] // This will be populated dynamically
+        },
+    ]
+};
+
+// Add the question banks to the main data object
+gameData.modules.find(m => m.id === 'law').questionBank = lawQuestionBank;
+gameData.modules.find(m => m.id === 'grapes').questionBank = grapeQuestionBank;
+gameData.modules.find(m => m.id === 'gastronomy').questionBank = gastronomyQuestionBank;
+gameData.modules.find(m => m.id === 'terroir').questionBank = terroirQuestionBank;
+gameData.modules.find(m => m.id === 'market').questionBank = marketQuestionBank;
+
+
+// --- GAME LOGIC ---
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Element Selectors ---
+    const mainMenu = document.getElementById('main-menu');
+    const moduleSelection = document.getElementById('module-selection');
+    const gameScreen = document.getElementById('game-screen');
+    const gameTitle = document.getElementById('game-title');
+    const questionArea = document.getElementById('question-area');
+    const feedbackArea = document.getElementById('feedback-area');
+    const geminiArea = document.getElementById('gemini-area');
+    const nextQuestionBtn = document.getElementById('next-question');
+    const backToMenuBtn = document.getElementById('back-to-menu');
+    const feedbackModal = document.getElementById('feedback-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalText = document.getElementById('modal-text');
+    const modalCloseBtn = document.getElementById('modal-close');
+
+    // --- State Variables ---
+    let currentModule = null;
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let sessionQuestions = [];
+
+    // --- Initialization ---
+    function init() {
+        displayMainMenu();
+        setupEventListeners();
+    }
+
+    // --- Main Menu ---
+    function displayMainMenu() {
+        mainMenu.classList.remove('hidden');
+        gameScreen.classList.add('hidden');
+        moduleSelection.innerHTML = '';
+        gameData.modules.forEach(module => {
+            const isLocked = !module.questions && !module.questionBank;
+            const card = document.createElement('div');
+            card.className = `game-card p-6 rounded-lg text-left ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+            card.innerHTML = `
+                <h3 class="text-xl font-bold text-white">${module.title}</h3>
+                <p class="text-gray-400 mt-2">${module.description}</p>
+                ${isLocked ? '<p class="text-sm text-purple-400 mt-4 font-semibold">Coming Soon!</p>' : ''}
+            `;
+            if (!isLocked) {
+                card.addEventListener('click', () => startGame(module.id));
+            }
+            moduleSelection.appendChild(card);
+        });
+    }
+
+    // --- Event Listeners ---
+    function setupEventListeners() {
+        backToMenuBtn.addEventListener('click', displayMainMenu);
+        nextQuestionBtn.addEventListener('click', nextQuestion);
+        modalCloseBtn.addEventListener('click', () => feedbackModal.classList.add('hidden'));
+    }
+    
+    // --- Fisher-Yates Shuffle Algorithm ---
+    function shuffleArray(array) {
+        let currentIndex = array.length, randomIndex;
+        // While there remain elements to shuffle.
+        while (currentIndex != 0) {
+            // Pick a remaining element.
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            // And swap it with the current element.
+            [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]];
+        }
+        return array;
+    }
+
+
+    // --- Game Flow ---
+    function startGame(moduleId) {
+        currentModule = gameData.modules.find(m => m.id === moduleId);
+        currentQuestionIndex = 0;
+        score = 0;
+        
+        // --- NEW: Dynamic Question Loading for Modules with Banks ---
+        if (currentModule.questionBank) {
+            sessionQuestions = shuffleArray([...currentModule.questionBank]).slice(0, 10);
+        } else {
+            sessionQuestions = currentModule.questions;
+        }
+
+        mainMenu.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        gameTitle.textContent = currentModule.title;
+        loadQuestion();
+    }
+
+    function loadQuestion() {
+        feedbackArea.innerHTML = '';
+        geminiArea.innerHTML = '';
+        nextQuestionBtn.classList.add('hidden');
+        const question = sessionQuestions[currentQuestionIndex];
+        if (!question) {
+            endGame();
+            return;
+        }
+
+        switch (currentModule.type) {
+            case 'timeline':
+                renderTimelineQuestion(question);
+                break;
+            case 'multiple-choice':
+                renderMultipleChoiceQuestion(question);
+                break;
+        }
+    }
+    
+    function nextQuestion() {
+        currentQuestionIndex++;
+        loadQuestion();
+    }
+
+    function endGame() {
+        showModal('Module Complete!', `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`);
+    }
+
+    // --- Question Renderers ---
+    function renderTimelineQuestion(question) {
+        const shuffledItems = [...question.items].sort(() => Math.random() - 0.5);
+        questionArea.innerHTML = `
+            <p class="text-lg mb-4">${question.prompt}</p>
+            <div class="flex flex-col md:flex-row gap-6">
+                <div id="source-list" class="w-full md:w-1/2 space-y-3">
+                    ${shuffledItems.map(item => `
+                        <div class="sortable-item bg-gray-700 p-4 rounded-lg shadow" draggable="true" data-id="${item.id}">
+                            ${item.text}
+                        </div>
+                    `).join('')}
+                </div>
+                <div id="drop-zone" class="w-full md:w-1/2 p-4 rounded-lg drop-zone space-y-3"></div>
+            </div>
+            <button id="submit-timeline" class="btn-primary mt-6 px-6 py-3 rounded-lg">Submit Order</button>
+        `;
+        setupDragAndDrop();
+        document.getElementById('submit-timeline').addEventListener('click', () => checkTimelineAnswer(question));
+    }
+    
+    function renderMultipleChoiceQuestion(question) {
+        const shuffledOptions = [...question.options].sort(() => Math.random() - 0.5);
+        questionArea.innerHTML = `
+            <p class="text-lg mb-4">${question.prompt}</p>
+            <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${shuffledOptions.map(option => `
+                    <button class="option-btn p-4 rounded-lg text-left w-full">${option}</button>
+                `).join('')}
+            </div>
+        `;
+        document.querySelectorAll('.option-btn').forEach(btn => {
+            btn.addEventListener('click', () => checkMultipleChoiceAnswer(btn.textContent, question));
+        });
+    }
+
+
+    // --- Answer Checkers ---
+    function checkTimelineAnswer(question) {
+        const droppedItems = document.querySelectorAll('#drop-zone .sortable-item');
+        const userOrderIds = Array.from(droppedItems).map(item => parseInt(item.dataset.id));
+        const itemTextMap = question.items.reduce((acc, item) => { acc[item.id] = item.text; return acc; }, {});
+        const correctOrder = [...question.items].sort((a, b) => a.answer - b.answer);
+        const correctOrderIds = correctOrder.map(item => item.id);
+        let isCorrect = userOrderIds.length === correctOrderIds.length && userOrderIds.every((val, index) => val === correctOrderIds[index]);
+
+        if (isCorrect) {
+            feedbackArea.innerHTML = `<p class="text-green-400 font-semibold">Correct! A flawless chronology.</p>`;
+            score++;
+        } else {
+            feedbackArea.innerHTML = `<p class="text-red-400 font-semibold">Not quite right. Compare your order to the correct sequence.</p>`;
+        }
+        
+        let userOrderHtml = userOrderIds.map((id, index) => {
+            const isItemCorrect = id === correctOrderIds[index];
+            return `<div class="timeline-feedback-item bg-gray-700 p-3 rounded-lg ${isItemCorrect ? 'correct' : 'incorrect'}">${itemTextMap[id]}</div>`;
+        }).join('');
+
+        let correctOrderHtml = correctOrder.map(item => `
+            <div class="bg-gray-900 border border-gray-700 p-3 rounded-lg"><span class="font-bold">${item.answer > 0 ? item.answer : `${Math.abs(item.answer)} BC`}:</span> ${item.text}</div>
+        `).join('');
+
+        questionArea.innerHTML = `
+            <p class="text-lg mb-4">${question.prompt}</p>
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="w-full md:w-1/2"><h4 class="font-bold text-lg mb-2 text-white">Your Order</h4><div class="space-y-3">${userOrderHtml}</div></div>
+                <div class="w-full md:w-1/2"><h4 class="font-bold text-lg mb-2 text-white">Correct Order</h4><div class="space-y-3">${correctOrderHtml}</div></div>
+            </div>`;
+        nextQuestionBtn.classList.remove('hidden');
+    }
+
+    function checkMultipleChoiceAnswer(selectedAnswer, question) {
+        const buttons = document.querySelectorAll('.option-btn');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            if (btn.textContent === question.answer) {
+                btn.classList.add('correct');
+            } else if (btn.textContent === selectedAnswer) {
+                btn.classList.add('incorrect');
+            }
+        });
+
+        if (selectedAnswer === question.answer) {
+            feedbackArea.innerHTML = `<p class="text-green-400 font-semibold">Correct!</p>`;
+            score++;
+            if (question.geminiData) {
+                renderGeminiButton(question.geminiData);
+            }
+        } else {
+            feedbackArea.innerHTML = `<p class="text-red-400 font-semibold">Incorrect. The correct answer is highlighted in green.</p>`;
+        }
+        nextQuestionBtn.classList.remove('hidden');
+    }
+
+    // --- Gemini API Integration ---
+    function renderGeminiButton(geminiData) {
+        let buttonText = '';
+        switch(geminiData.type) {
+            case 'tastingNote':
+                buttonText = '✨ Generate Tasting Note';
+                break;
+            case 'grape':
+                buttonText = '📚 Generate Ampelography Profile';
+                break;
+            case 'pairingExplanation':
+                buttonText = '🍴 Explain the Pairing';
+                break;
+        }
+        geminiArea.innerHTML = `<button id="gemini-btn" class="btn-primary px-4 py-2 rounded-lg flex items-center justify-center">${buttonText}</button>`;
+        document.getElementById('gemini-btn').addEventListener('click', () => callGeminiApi(geminiData));
+    }
+
+    async function callGeminiApi(data) {
+        const geminiButton = document.getElementById('gemini-btn');
+        geminiButton.disabled = true;
+        geminiButton.innerHTML = `<div class="loader"></div><span>Generating...</span>`;
+
+        let prompt = '';
+        switch(data.type) {
+            case 'tastingNote':
+                prompt = `You are a world-renowned wine critic with the authority of Jancis Robinson or a Master of Wine. Write a detailed, professional tasting note for the following Bulgarian wine:
+                - Producer: ${data.producer}
+                - Wine: ${data.wine}
+                - Vintage: ${data.vintage}
+                - Composition: ${data.composition}
+                Structure your note with sections for Appearance, Nose, and Palate. Be evocative and use standard, advanced wine tasting terminology. Conclude with a brief assessment of its aging potential.`;
+                break;
+            case 'grape':
+                prompt = `You are a master ampelographer and wine educator. Write a detailed, textbook-style profile for the Bulgarian grape variety: ${data.grape}.
+                Structure your response with the following sections:
+                - **Overview and History:** Briefly describe its significance and origins in Bulgaria.
+                - **Viticultural Characteristics:** Discuss its growing habits, ripening period, key strengths, and weaknesses (e.g., susceptibility to diseases, frost).
+                - **Typical Wine Profile:** Describe the common characteristics of wines made from this grape (color, body, tannin, acidity, key aromas, and flavors).`;
+                break;
+            case 'pairingExplanation':
+                 prompt = `You are a master sommelier and food theorist. Explain in detail the gastronomic principles behind the classic Bulgarian pairing of **${data.wine}** with **${data.dish}**. 
+                 Discuss the interaction of flavors, textures, and structural components (acidity, tannin, fat, salt). Explain why this pairing is successful from a sensory perspective.`;
+                break;
+        }
+
+
+        try {
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // API key is handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            let text = 'Could not generate response at this time.';
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                text = result.candidates[0].content.parts[0].text;
+            }
+            
+            displayGeminiResponse(text, data.type);
+
+        } catch (error) {
+            console.error("Gemini API call failed:", error);
+            displayGeminiResponse(`Error: Could not retrieve information. Please check the console for details.`);
+        } finally {
+             geminiButton.style.display = 'none';
+        }
+    }
+
+    function displayGeminiResponse(text, type) {
+        let title = '';
+        switch(type) {
+            case 'tastingNote':
+                title = "Critic's Tasting Note";
+                break;
+            case 'grape':
+                title = "Ampelography Profile";
+                break;
+            case 'pairingExplanation':
+                title = "Gastronomic Analysis";
+                break;
+        }
+        
+        // Simple markdown to HTML conversion
+        let htmlText = text
+            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>') // Bold
+            .replace(/\n/g, '<br>'); // Newlines
+
+        geminiArea.innerHTML = `
+            <div class="bg-gray-900 p-6 rounded-lg border border-purple-500 shadow-lg">
+                <h4 class="text-lg font-bold text-purple-300 mb-3">${title}</h4>
+                <p class="text-gray-300 whitespace-pre-wrap">${htmlText}</p>
+            </div>
+        `;
+    }
+
+
+    // --- Utilities ---
+    function showModal(title, text) {
+        modalTitle.textContent = title;
+        modalText.textContent = text;
+        feedbackModal.classList.remove('hidden');
+    }
+
+    function setupDragAndDrop() {
+        const draggables = document.querySelectorAll('.sortable-item');
+        const dropZone = document.getElementById('drop-zone');
+
+        draggables.forEach(draggable => {
+            draggable.addEventListener('dragstart', () => draggable.classList.add('dragging'));
+            draggable.addEventListener('dragend', () => draggable.classList.remove('dragging'));
+        });
+
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(dropZone, e.clientY);
+            const dragging = document.querySelector('.dragging');
+            if (afterElement == null) {
+                dropZone.appendChild(dragging);
+            } else {
+                dropZone.insertBefore(dragging, afterElement);
+            }
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+    }
+
+    // --- Start the application ---
+    init();
+});
+</script>
+
+</body>
+</html>
