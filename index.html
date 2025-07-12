@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentQuestionIndex = 0;
         score = 0;
         
-        // --- NEW: Dynamic Question Loading for Modules with Banks ---
+        // --- Dynamic Question Loading for Modules with Banks ---
         if (currentModule.questionBank) {
             sessionQuestions = shuffleArray([...currentModule.questionBank]).slice(0, 10);
         } else {
@@ -777,20 +777,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const dropZone = document.getElementById('drop-zone');
 
         draggables.forEach(draggable => {
+            // Mouse events
             draggable.addEventListener('dragstart', () => draggable.classList.add('dragging'));
             draggable.addEventListener('dragend', () => draggable.classList.remove('dragging'));
+
+            // Touch events
+            draggable.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                draggable.classList.add('dragging');
+            }, { passive: false });
+
+            draggable.addEventListener('touchend', () => draggable.classList.remove('dragging'));
         });
 
         dropZone.addEventListener('dragover', e => {
             e.preventDefault();
             const afterElement = getDragAfterElement(dropZone, e.clientY);
             const dragging = document.querySelector('.dragging');
-            if (afterElement == null) {
-                dropZone.appendChild(dragging);
-            } else {
-                dropZone.insertBefore(dragging, afterElement);
+            if (dragging) {
+                 if (afterElement == null) {
+                    dropZone.appendChild(dragging);
+                } else {
+                    dropZone.insertBefore(dragging, afterElement);
+                }
             }
         });
+
+        dropZone.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const afterElement = getDragAfterElement(dropZone, touch.clientY);
+            const dragging = document.querySelector('.dragging');
+            if (dragging) {
+                if (afterElement == null) {
+                    dropZone.appendChild(dragging);
+                } else {
+                    dropZone.insertBefore(dragging, afterElement);
+                }
+            }
+        }, { passive: false });
 
         function getDragAfterElement(container, y) {
             const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
