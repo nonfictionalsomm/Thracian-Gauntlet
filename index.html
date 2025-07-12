@@ -23,17 +23,15 @@
         .modal-backdrop {
             background-color: rgba(0, 0, 0, 0.75);
         }
-        .sortable-item {
-            cursor: grab;
-            user-select: none;
+        .timeline-item {
+            cursor: pointer;
         }
-        .sortable-item.dragging {
-            opacity: 0.5;
+        .timeline-item:hover {
             background-color: #4B5563;
         }
-        .drop-zone {
-            border: 2px dashed #4B5563;
-            min-height: 50px;
+        .timeline-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         .timeline-feedback-item.correct {
             border-left: 4px solid #10B981;
@@ -569,16 +567,19 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="flex flex-col md:flex-row gap-6">
                 <div id="source-list" class="w-full md:w-1/2 space-y-3">
                     ${shuffledItems.map(item => `
-                        <div class="sortable-item bg-gray-700 p-4 rounded-lg shadow" draggable="true" data-id="${item.id}">
+                        <div class="timeline-item bg-gray-700 p-4 rounded-lg shadow" data-id="${item.id}">
                             ${item.text}
                         </div>
                     `).join('')}
                 </div>
-                <div id="drop-zone" class="w-full md:w-1/2 p-4 rounded-lg drop-zone space-y-3"></div>
+                <div class="w-full md:w-1/2">
+                     <h4 class="font-bold text-lg mb-2 text-white">Your Timeline</h4>
+                     <div id="drop-zone" class="p-4 rounded-lg bg-gray-900 min-h-[150px] space-y-3"></div>
+                </div>
             </div>
             <button id="submit-timeline" class="btn-primary mt-6 px-6 py-3 rounded-lg">Submit Order</button>
         `;
-        setupDragAndDrop();
+        setupTapToOrder();
         document.getElementById('submit-timeline').addEventListener('click', () => checkTimelineAnswer(question));
     }
     
@@ -600,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Answer Checkers ---
     function checkTimelineAnswer(question) {
-        const droppedItems = document.querySelectorAll('#drop-zone .sortable-item');
+        const droppedItems = document.querySelectorAll('#drop-zone .timeline-item');
         const userOrderIds = Array.from(droppedItems).map(item => parseInt(item.dataset.id));
         const itemTextMap = question.items.reduce((acc, item) => { acc[item.id] = item.text; return acc; }, {});
         const correctOrder = [...question.items].sort((a, b) => a.answer - b.answer);
@@ -614,10 +615,10 @@ document.addEventListener('DOMContentLoaded', () => {
             feedbackArea.innerHTML = `<p class="text-red-400 font-semibold">Not quite right. Compare your order to the correct sequence.</p>`;
         }
         
-        let userOrderHtml = userOrderIds.map((id, index) => {
+        let userOrderHtml = userOrderIds.length > 0 ? userOrderIds.map((id, index) => {
             const isItemCorrect = id === correctOrderIds[index];
             return `<div class="timeline-feedback-item bg-gray-700 p-3 rounded-lg ${isItemCorrect ? 'correct' : 'incorrect'}">${itemTextMap[id]}</div>`;
-        }).join('');
+        }).join('') : '<p class="text-gray-500">You did not order any items.</p>';
 
         let correctOrderHtml = correctOrder.map(item => `
             <div class="bg-gray-900 border border-gray-700 p-3 rounded-lg"><span class="font-bold">${item.answer > 0 ? item.answer : `${Math.abs(item.answer)} BC`}:</span> ${item.text}</div>
@@ -705,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
             const payload = { contents: chatHistory };
-            const apiKey = ""; // API key is handled by the environment
+            const apiKey = ""; // This will be populated by the environment.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             
             const response = await fetch(apiUrl, {
@@ -772,63 +773,25 @@ document.addEventListener('DOMContentLoaded', () => {
         feedbackModal.classList.remove('hidden');
     }
 
-    function setupDragAndDrop() {
-        const draggables = document.querySelectorAll('.sortable-item');
+    function setupTapToOrder() {
+        const sourceList = document.getElementById('source-list');
         const dropZone = document.getElementById('drop-zone');
 
-        draggables.forEach(draggable => {
-            // Mouse events
-            draggable.addEventListener('dragstart', () => draggable.classList.add('dragging'));
-            draggable.addEventListener('dragend', () => draggable.classList.remove('dragging'));
+        sourceList.addEventListener('click', function(e) {
+            if (e.target.classList.contains('timeline-item')) {
+                const item = e.target;
+                item.classList.add('disabled');
+                const newItem = item.cloneNode(true);
+                newItem.classList.remove('disabled');
+                dropZone.appendChild(newItem);
 
-            // Touch events
-            draggable.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                draggable.classList.add('dragging');
-            }, { passive: false });
-
-            draggable.addEventListener('touchend', () => draggable.classList.remove('dragging'));
-        });
-
-        dropZone.addEventListener('dragover', e => {
-            e.preventDefault();
-            const afterElement = getDragAfterElement(dropZone, e.clientY);
-            const dragging = document.querySelector('.dragging');
-            if (dragging) {
-                 if (afterElement == null) {
-                    dropZone.appendChild(dragging);
-                } else {
-                    dropZone.insertBefore(dragging, afterElement);
-                }
+                // Add click listener to new item in drop zone to move it back
+                newItem.addEventListener('click', function() {
+                    sourceList.querySelector(`.timeline-item[data-id='${newItem.dataset.id}']`).classList.remove('disabled');
+                    newItem.remove();
+                });
             }
         });
-
-        dropZone.addEventListener('touchmove', e => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const afterElement = getDragAfterElement(dropZone, touch.clientY);
-            const dragging = document.querySelector('.dragging');
-            if (dragging) {
-                if (afterElement == null) {
-                    dropZone.appendChild(dragging);
-                } else {
-                    dropZone.insertBefore(dragging, afterElement);
-                }
-            }
-        }, { passive: false });
-
-        function getDragAfterElement(container, y) {
-            const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-        }
     }
 
     // --- Start the application ---
