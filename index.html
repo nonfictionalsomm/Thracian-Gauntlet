@@ -54,6 +54,20 @@
             background-color: #B91C1C;
             border-color: #EF4444;
         }
+        .btn-primary {
+            background-color: #6D28D9;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #5B21B6;
+        }
+        .btn-secondary {
+            background-color: #4B5563;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #374151;
+        }
         .btn-next-question {
             border: 2px solid #6D28D9;
             box-shadow: 0 0 10px rgba(109, 40, 217, 0.5);
@@ -87,22 +101,18 @@
         <!-- Main Menu Screen -->
         <div id="main-menu" class="text-center">
             <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">The Thracian Gauntlet</h1>
-            <p class="text-lg text-gray-400 mb-8">A Bulgarian Wine Master's Challenge</p>
+            <p class="text-lg text-gray-400 mb-6">A Bulgarian Wine Master's Challenge</p>
             
-            <!-- API Key Input Section -->
-            <div id="api-key-section" class="max-w-lg mx-auto bg-gray-800 p-6 rounded-lg mb-8 border border-purple-700">
-                <h3 class="text-xl font-bold text-white mb-3">Enable AI Features</h3>
-                <p class="text-gray-400 mb-4 text-sm">To use the AI-powered features (tasting notes, profiles), you need a Google AI Studio API key. This is free and allows the game to connect to the Gemini model.</p>
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API Key" class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white w-full focus:outline-none focus:ring-2 focus:ring-purple-500">
-                    <button id="save-api-key" class="btn-primary px-4 py-2 rounded-lg whitespace-nowrap">Save Key</button>
-                </div>
-                 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 mt-3 inline-block">Get your API Key here &rarr;</a>
+            <!-- Welcome Message -->
+            <div class="max-w-2xl mx-auto bg-gray-900 p-4 rounded-lg mb-8 text-center border border-gray-700">
+                 <p class="text-gray-300">Welcome! This is an interactive game to help you learn, study, and test your advanced knowledge of Bulgarian wine. Select a module below to begin your challenge.</p>
             </div>
 
             <div id="module-selection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Modules will be injected here by JavaScript -->
             </div>
+
+            <button id="open-api-modal" class="btn-secondary mt-8 px-4 py-2 rounded-lg">⚙️ AI Settings</button>
         </div>
 
         <!-- Game Screen -->
@@ -119,12 +129,26 @@
 
     </div>
 
-    <!-- Feedback Modal -->
-    <div id="feedback-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop hidden">
+    <!-- Info Modal (for welcomes and end-of-game) -->
+    <div id="info-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop hidden">
         <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
             <h3 id="modal-title" class="text-2xl font-bold mb-4"></h3>
             <p id="modal-text" class="text-gray-300 mb-6"></p>
             <button id="modal-close" class="btn-primary w-full px-4 py-2 rounded-lg">Continue</button>
+        </div>
+    </div>
+    
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop hidden">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-lg w-full mx-4">
+            <h3 class="text-xl font-bold text-white mb-3">Enable AI Features</h3>
+            <p class="text-gray-400 mb-4 text-sm">To use the AI-powered features (tasting notes, profiles), you need a Google AI Studio API key. This is free and allows the game to connect to the Gemini model.</p>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="password" id="api-key-input" placeholder="Enter your Google AI Studio API Key" class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white w-full focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <button id="save-api-key" class="btn-primary px-4 py-2 rounded-lg whitespace-nowrap">Save Key</button>
+            </div>
+             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 mt-3 inline-block">Get your API Key here &rarr;</a>
+             <button id="close-api-modal" class="btn-secondary w-full mt-6 px-4 py-2 rounded-lg">Close</button>
         </div>
     </div>
 
@@ -365,6 +389,7 @@ const gameData = {
             title: "The Historian's Scroll",
             description: "Arrange key events in their correct chronological order.",
             type: 'timeline',
+            welcomeMessage: "Welcome to The Historian's Scroll. This module tests your knowledge of Bulgarian wine history. You will be presented with a list of historical events. Tap the events in the left column to move them to your timeline on the right. Place them in the correct chronological order and press 'Submit' to test your knowledge.",
             questions: [
                 {
                     prompt: "Chronicle the ancient foundations of Bulgarian wine, from Thracian reverence to the early influence of empires.",
@@ -418,6 +443,7 @@ const gameData = {
             title: "The Terroir Architect",
             description: "Test your knowledge of Bulgarian geography, climate, and soil.",
             type: 'multiple-choice',
+            welcomeMessage: "Welcome to The Terroir Architect. This module will test your knowledge of Bulgaria's geography, climate, soils, and viticultural practices. You will be presented with a series of multiple-choice questions. Select the best answer for each.",
             questions: [] // This will be populated dynamically
         },
         {
@@ -425,6 +451,7 @@ const gameData = {
             title: "The Ampelographer's Challenge",
             description: "Test your knowledge of Bulgaria's indigenous and international grape varieties.",
             type: 'multiple-choice',
+            welcomeMessage: "Welcome to The Ampelographer's Challenge. This module covers the indigenous, crossed, and international grape varieties of Bulgaria. Answer the multiple-choice questions to test your knowledge. For key grapes, you'll have the option to generate a detailed AI-powered profile.",
             questions: [] // This will be populated dynamically
         },
         {
@@ -432,6 +459,7 @@ const gameData = {
             title: "The Lawmaker's Desk",
             description: "Navigate the complexities of Bulgarian wine law and labeling.",
             type: 'multiple-choice',
+            welcomeMessage: "Welcome to The Lawmaker's Desk. This module dives into the complexities of Bulgarian wine law. You will face a series of multiple-choice questions covering the quality pyramid, labeling terms, and legal winemaking practices.",
             questions: [] // This will be populated dynamically
         },
         {
@@ -439,6 +467,7 @@ const gameData = {
             title: "The Gastronome's Table",
             description: "Master the art of pairing Bulgarian wine with its classic cuisine.",
             type: 'multiple-choice',
+            welcomeMessage: "Welcome to The Gastronome's Table. This module explores the rich culinary culture surrounding Bulgarian wine. You will be tested on classic food pairings, iconic ingredients, and traditional beverages. For key pairings, you can generate a detailed gastronomic explanation from our AI sommelier.",
             questions: [] // This will be populated dynamically
         },
         {
@@ -446,6 +475,7 @@ const gameData = {
             title: "The Critic's Corner",
             description: "Identify key producers, vintages, and market trends.",
             type: 'multiple-choice',
+            welcomeMessage: "Welcome to The Critic's Corner. This module covers the market context of Bulgarian wine, including benchmark producers, key vintages, and export trends. Answer the multiple-choice questions and get AI-generated tasting notes for flagship wines.",
             questions: [] // This will be populated dynamically
         },
     ]
@@ -471,10 +501,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const geminiArea = document.getElementById('gemini-area');
     const nextQuestionBtn = document.getElementById('next-question');
     const backToMenuBtn = document.getElementById('back-to-menu');
-    const feedbackModal = document.getElementById('feedback-modal');
+    const infoModal = document.getElementById('info-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalText = document.getElementById('modal-text');
     const modalCloseBtn = document.getElementById('modal-close');
+    const apiKeyModal = document.getElementById('api-key-modal');
+    const openApiKeyModalBtn = document.getElementById('open-api-modal');
+    const closeApiKeyModalBtn = document.getElementById('close-api-modal');
     const saveApiKeyBtn = document.getElementById('save-api-key');
     const apiKeyInput = document.getElementById('api-key-input');
 
@@ -506,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${isLocked ? '<p class="text-sm text-purple-400 mt-4 font-semibold">Coming Soon!</p>' : ''}
             `;
             if (!isLocked) {
-                card.addEventListener('click', () => startGame(module.id));
+                card.addEventListener('click', () => prepareGame(module.id));
             }
             moduleSelection.appendChild(card);
         });
@@ -516,10 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupEventListeners() {
         backToMenuBtn.addEventListener('click', displayMainMenu);
         nextQuestionBtn.addEventListener('click', nextQuestion);
-        modalCloseBtn.addEventListener('click', () => {
-            feedbackModal.classList.add('hidden');
-            displayMainMenu();
-        });
+        openApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.remove('hidden'));
+        closeApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.add('hidden'));
         saveApiKeyBtn.addEventListener('click', () => {
             userApiKey = apiKeyInput.value.trim();
             if(userApiKey) {
@@ -530,7 +561,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveApiKeyBtn.textContent = 'Save Key';
                     saveApiKeyBtn.classList.remove('bg-green-600');
                     saveApiKeyBtn.classList.add('btn-primary');
-                }, 2000);
+                    apiKeyModal.classList.add('hidden');
+                }, 1500);
             }
         });
     }
@@ -538,26 +570,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Fisher-Yates Shuffle Algorithm ---
     function shuffleArray(array) {
         let currentIndex = array.length, randomIndex;
-        // While there remain elements to shuffle.
         while (currentIndex != 0) {
-            // Pick a remaining element.
             randomIndex = Math.floor(Math.random() * currentIndex);
             currentIndex--;
-            // And swap it with the current element.
-            [array[currentIndex], array[randomIndex]] = [
-            array[randomIndex], array[currentIndex]];
+            [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
         }
         return array;
     }
 
-
     // --- Game Flow ---
-    function startGame(moduleId) {
+    function prepareGame(moduleId) {
         currentModule = gameData.modules.find(m => m.id === moduleId);
+        showInfoModal(currentModule.title, currentModule.welcomeMessage, startGame);
+    }
+
+    function startGame() {
         currentQuestionIndex = 0;
         score = 0;
         
-        // --- Dynamic Question Loading for Modules with Banks ---
         if (currentModule.questionBank) {
             sessionQuestions = shuffleArray([...currentModule.questionBank]).slice(0, 10);
         } else {
@@ -600,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentModule.questionBank) {
             endMessage += "\n\nCome back any time to test your knowledge with a new set of questions!";
         }
-        showModal('Module Complete!', endMessage);
+        showInfoModal('Module Complete!', endMessage, displayMainMenu);
     }
 
     // --- Question Renderers ---
@@ -704,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Gemini API Integration ---
     function renderGeminiButton(geminiData) {
         if (!userApiKey) {
-            geminiArea.innerHTML = `<p class="text-sm text-yellow-400">Enter an API key on the main menu to enable AI features.</p>`;
+            geminiArea.innerHTML = `<p class="text-sm text-yellow-400">Enter an API key via the 'AI Settings' on the main menu to enable this feature.</p>`;
             return;
         }
 
@@ -819,10 +849,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Utilities ---
-    function showModal(title, text) {
+    function showInfoModal(title, text, callback) {
         modalTitle.textContent = title;
         modalText.innerHTML = text.replace(/\n/g, '<br>'); // Use innerHTML to render line breaks
-        feedbackModal.classList.remove('hidden');
+        infoModal.classList.remove('hidden');
+
+        // Clone the button to remove old event listeners
+        const newModalCloseBtn = modalCloseBtn.cloneNode(true);
+        infoModal.querySelector('button').replaceWith(newModalCloseBtn);
+        
+        newModalCloseBtn.addEventListener('click', () => {
+            infoModal.classList.add('hidden');
+            if (callback) {
+                callback();
+            }
+        }, { once: true }); // Ensure listener only fires once
     }
 
     function setupTapToOrder() {
