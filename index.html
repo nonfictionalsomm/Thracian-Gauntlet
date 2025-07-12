@@ -101,13 +101,8 @@
         <!-- Main Menu Screen -->
         <div id="main-menu" class="text-center">
             <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">The Thracian Gauntlet</h1>
-            <p class="text-lg text-gray-400 mb-6">A Bulgarian Wine Master's Challenge</p>
+            <p class="text-lg text-gray-400 mb-8">A Bulgarian Wine Master's Challenge</p>
             
-            <!-- Welcome Message -->
-            <div class="max-w-2xl mx-auto bg-gray-900 p-4 rounded-lg mb-8 text-center border border-gray-700">
-                 <p class="text-gray-300">Welcome! This is an interactive game to help you learn, study, and test your advanced knowledge of Bulgarian wine. Select a module below to begin your challenge.</p>
-            </div>
-
             <div id="module-selection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- Modules will be injected here by JavaScript -->
             </div>
@@ -148,6 +143,7 @@
                 <button id="save-api-key" class="btn-primary px-4 py-2 rounded-lg whitespace-nowrap">Save Key</button>
             </div>
              <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 mt-3 inline-block">Get your API Key here &rarr;</a>
+             <p class="text-xs text-gray-500 mt-4">Remember to protect your API key like a password. Save it somewhere safe for future use.</p>
              <button id="close-api-modal" class="btn-secondary w-full mt-6 px-4 py-2 rounded-lg">Close</button>
         </div>
     </div>
@@ -522,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         displayMainMenu();
         setupEventListeners();
+        showInfoModal('Welcome to the Gauntlet!', 'This is an interactive game to help you learn, study, and test your advanced knowledge of Bulgarian wine. Select a module below to begin your challenge.', null);
     }
 
     // --- Main Menu ---
@@ -734,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Gemini API Integration ---
     function renderGeminiButton(geminiData) {
         if (!userApiKey) {
-            geminiArea.innerHTML = `<p class="text-sm text-yellow-400">Enter an API key via the 'AI Settings' on the main menu to enable this feature.</p>`;
+            geminiArea.innerHTML = `<p class="text-sm text-yellow-400">To use advanced AI features, please go to 'AI Settings' on the main menu and enter your API key.</p>`;
             return;
         }
 
