@@ -492,7 +492,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupEventListeners() {
         backToMenuBtn.addEventListener('click', displayMainMenu);
         nextQuestionBtn.addEventListener('click', nextQuestion);
-        modalCloseBtn.addEventListener('click', () => feedbackModal.classList.add('hidden'));
+        modalCloseBtn.addEventListener('click', () => {
+            feedbackModal.classList.add('hidden');
+            displayMainMenu();
+        });
     }
     
     // --- Fisher-Yates Shuffle Algorithm ---
@@ -556,7 +559,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endGame() {
-        showModal('Module Complete!', `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`);
+        let endMessage = `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`;
+        if (currentModule.questionBank) {
+            endMessage += "\n\nCome back any time to test your knowledge with a new set of questions!";
+        }
+        showModal('Module Complete!', endMessage);
     }
 
     // --- Question Renderers ---
@@ -566,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <p class="text-lg mb-4">${question.prompt}</p>
             <div class="flex flex-col md:flex-row gap-6">
                 <div id="source-list" class="w-full md:w-1/2 space-y-3">
+                    <h4 class="font-bold text-lg mb-2 text-white">Events to Order</h4>
                     ${shuffledItems.map(item => `
                         <div class="timeline-item bg-gray-700 p-4 rounded-lg shadow" data-id="${item.id}">
                             ${item.text}
@@ -769,7 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Utilities ---
     function showModal(title, text) {
         modalTitle.textContent = title;
-        modalText.textContent = text;
+        modalText.innerHTML = text.replace(/\n/g, '<br>'); // Use innerHTML to render line breaks
         feedbackModal.classList.remove('hidden');
     }
 
@@ -778,8 +786,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const dropZone = document.getElementById('drop-zone');
 
         sourceList.addEventListener('click', function(e) {
-            if (e.target.classList.contains('timeline-item')) {
-                const item = e.target;
+            if (e.target.closest('.timeline-item')) {
+                const item = e.target.closest('.timeline-item');
+                if (item.classList.contains('disabled')) return;
+
                 item.classList.add('disabled');
                 const newItem = item.cloneNode(true);
                 newItem.classList.remove('disabled');
