@@ -92,6 +92,40 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Flashcard Styles */
+        .flashcard-container {
+            perspective: 1000px;
+        }
+        .flashcard {
+            width: 100%;
+            height: 250px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+        }
+        .flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+        .flashcard-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+        .flashcard-front {
+            background-color: #374151;
+        }
+        .flashcard-back {
+            background-color: #4B5563;
+            transform: rotateY(180deg);
+        }
     </style>
 </head>
 <body class="text-gray-200">
@@ -103,8 +137,13 @@
             <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">The Thracian Gauntlet</h1>
             <p class="text-lg text-gray-400 mb-8">A Bulgarian Wine Master's Challenge</p>
             
-            <div id="module-selection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Modules will be injected here by JavaScript -->
+            <div id="module-container" class="space-y-6">
+                <div id="top-modules" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Top modules will be injected here -->
+                </div>
+                <div id="bottom-modules" class="flex justify-center">
+                    <!-- Bottom centered module will be injected here -->
+                </div>
             </div>
 
             <button id="open-api-modal" class="btn-secondary mt-8 px-4 py-2 rounded-lg">⚙️ AI Settings</button>
@@ -119,7 +158,7 @@
             </div>
             <div id="feedback-area" class="mt-4 text-lg"></div>
             <div id="gemini-area" class="mt-6"></div>
-            <button id="next-question" class="btn-next-question mt-6 px-6 py-3 rounded-lg w-full md:w-auto hidden">Next Question</button>
+            <div id="nav-area" class="flex justify-between items-center mt-6"></div>
         </div>
 
     </div>
@@ -145,6 +184,18 @@
              <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 mt-3 inline-block">Get your API Key here &rarr;</a>
              <p class="text-xs text-gray-500 mt-4">Remember to protect your API key like a password. Save it somewhere safe for future use.</p>
              <button id="close-api-modal" class="btn-secondary w-full mt-6 px-4 py-2 rounded-lg">Close</button>
+        </div>
+    </div>
+    
+    <!-- Flashcard Topic Selection Modal -->
+    <div id="flashcard-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop hidden">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-4">Build Your Study Deck</h3>
+            <p class="text-gray-300 mb-6">Select the topics you want to include in your flashcard session.</p>
+            <div id="flashcard-topics" class="space-y-3 mb-6">
+                <!-- Checkboxes will be inserted here -->
+            </div>
+            <button id="start-flashcard-session" class="btn-primary w-full px-4 py-2 rounded-lg">Start Studying</button>
         </div>
     </div>
 
@@ -308,7 +359,7 @@ const terroirQuestionBank = [
     { prompt: "The viticultural risk of Botrytis cinerea (grey mould) is a particular concern for which thin-skinned grape variety?", options: ["Cabernet Sauvignon", "Mavrud", "Gamza", "Rubin"], answer: "Gamza" },
     { prompt: "The Gobelet (bush vine) training system is being revived by some quality-focused producers because it is believed to offer what benefit in hot climates?", options: ["Better sun and wind protection for the grapes", "Higher yields per vine", "Easier mechanization", "Better resistance to frost"], answer: "Better sun and wind protection for the grapes" },
     { prompt: "Bulgaria's latitude positions it parallel to which two famous European wine regions?", options: ["Champagne and the Loire Valley", "Rioja and the Douro Valley", "Bordeaux and Tuscany", "Alsace and Baden"], answer: "Bordeaux and Tuscany" },
-    { prompt: "What is the primary influence moderating the climate of the Black Sea Coast region?", options: ["The Balkan Mountains", "The Aegean Sea", "The Black Sea", "The Danube River"], answer: "The Black Sea" },
+    { prompt: "What is the primary influence moderating the climate of the most eastern winegrowing area?", options: ["The Balkan Mountains", "The Aegean Sea", "The Black Sea", "The Danube River"], answer: "The Black Sea" },
     { prompt: "The 'Bordeaux benchmark' style of winemaking in Bulgaria typically involves aging in what type of vessel?", options: ["Large, neutral oak casks", "Stainless steel tanks", "Small, 225-liter French oak barriques", "Clay amphorae"], answer: "Small, 225-liter French oak barriques" },
     { prompt: "What is the most significant challenge posed by Chernozem and Smolnitsa soils for viticulture?", options: ["Poor water retention", "Low mineral content", "Excessive fertility can lead to overly vigorous growth", "High pH, leading to alkaline conditions"], answer: "Excessive fertility can lead to overly vigorous growth" },
     { prompt: "The investment by Count Stephan von Neipperg in Bessa Valley was largely due to the similarity of its soils to which prestigious appellation?", options: ["Pauillac", "Saint-Émilion", "Barolo", "Côte-Rôtie"], answer: "Saint-Émilion" },
@@ -474,6 +525,14 @@ const gameData = {
             welcomeMessage: "Welcome to The Critic's Corner. This module covers the market context of Bulgarian wine, including benchmark producers, key vintages, and export trends. Answer the multiple-choice questions and get AI-generated tasting notes for flagship wines.",
             questions: [] // This will be populated dynamically
         },
+        {
+            id: 'flashcards',
+            title: "Flashcard Study",
+            description: "Review key facts and concepts with this comprehensive study deck.",
+            type: 'flashcard',
+            welcomeMessage: "Welcome to the Flashcard Study deck. This module is for review. Click or tap a card to flip it and see the answer. Use the 'Previous' and 'Next' buttons to navigate through the randomized deck. Good luck!",
+            questions: [] // This will be populated dynamically
+        }
     ]
 };
 
@@ -489,13 +548,13 @@ gameData.modules.find(m => m.id === 'market').questionBank = marketQuestionBank;
 document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const mainMenu = document.getElementById('main-menu');
-    const moduleSelection = document.getElementById('module-selection');
+    const moduleSelection = document.getElementById('module-container');
     const gameScreen = document.getElementById('game-screen');
     const gameTitle = document.getElementById('game-title');
     const questionArea = document.getElementById('question-area');
     const feedbackArea = document.getElementById('feedback-area');
     const geminiArea = document.getElementById('gemini-area');
-    const nextQuestionBtn = document.getElementById('next-question');
+    const navArea = document.getElementById('nav-area');
     const backToMenuBtn = document.getElementById('back-to-menu');
     const infoModal = document.getElementById('info-modal');
     const modalTitle = document.getElementById('modal-title');
@@ -506,6 +565,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeApiKeyModalBtn = document.getElementById('close-api-modal');
     const saveApiKeyBtn = document.getElementById('save-api-key');
     const apiKeyInput = document.getElementById('api-key-input');
+    const flashcardModal = document.getElementById('flashcard-modal');
+    const flashcardTopicsContainer = document.getElementById('flashcard-topics');
+    const startFlashcardSessionBtn = document.getElementById('start-flashcard-session');
 
     // --- State Variables ---
     let currentModule = null;
@@ -516,6 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     function init() {
+        buildFlashcardBank();
         displayMainMenu();
         setupEventListeners();
         showInfoModal('Welcome to the Gauntlet!', 'This is an interactive game to help you learn, study, and test your advanced knowledge of Bulgarian wine. Select a module below to begin your challenge.', null);
@@ -525,11 +588,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayMainMenu() {
         mainMenu.classList.remove('hidden');
         gameScreen.classList.add('hidden');
-        moduleSelection.innerHTML = '';
+        const topModulesContainer = document.getElementById('top-modules');
+        const bottomModulesContainer = document.getElementById('bottom-modules');
+        topModulesContainer.innerHTML = '';
+        bottomModulesContainer.innerHTML = '';
+
         gameData.modules.forEach(module => {
-            const isLocked = !module.questions && !module.questionBank;
+            const isLocked = !module.questions && !module.questionBank && module.id !== 'flashcards';
             const card = document.createElement('div');
-            card.className = `game-card p-6 rounded-lg text-left ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
+            card.className = `game-card p-6 rounded-lg text-left ${isLocked ? 'opacity-50 cursor-not-allowed' : 'w-full md:w-auto'}`;
             card.innerHTML = `
                 <h3 class="text-xl font-bold text-white">${module.title}</h3>
                 <p class="text-gray-400 mt-2">${module.description}</p>
@@ -538,14 +605,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isLocked) {
                 card.addEventListener('click', () => prepareGame(module.id));
             }
-            moduleSelection.appendChild(card);
+
+            if (module.id === 'flashcards') {
+                bottomModulesContainer.appendChild(card);
+            } else {
+                topModulesContainer.appendChild(card);
+            }
         });
     }
 
     // --- Event Listeners ---
     function setupEventListeners() {
         backToMenuBtn.addEventListener('click', displayMainMenu);
-        nextQuestionBtn.addEventListener('click', nextQuestion);
         openApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.remove('hidden'));
         closeApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.add('hidden'));
         saveApiKeyBtn.addEventListener('click', () => {
@@ -561,6 +632,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiKeyModal.classList.add('hidden');
                 }, 1500);
             }
+        });
+        startFlashcardSessionBtn.addEventListener('click', () => {
+             flashcardModal.classList.add('hidden');
+             startGame();
         });
     }
     
@@ -578,17 +653,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Flow ---
     function prepareGame(moduleId) {
         currentModule = gameData.modules.find(m => m.id === moduleId);
-        showInfoModal(currentModule.title, currentModule.welcomeMessage, startGame);
+        if (moduleId === 'flashcards') {
+            showFlashcardTopicModal();
+        } else {
+            showInfoModal(currentModule.title, currentModule.welcomeMessage, startGame);
+        }
     }
 
     function startGame() {
         currentQuestionIndex = 0;
         score = 0;
         
-        if (currentModule.questionBank) {
+        if (currentModule.type === 'flashcard') {
+            const selectedTopics = Array.from(flashcardTopicsContainer.querySelectorAll('input:checked')).map(input => input.value);
+            const fullDeck = gameData.modules.find(m => m.id === 'flashcards').questionBank;
+            if (selectedTopics.length > 0) {
+                 sessionQuestions = shuffleArray(fullDeck.filter(card => selectedTopics.includes(card.topic)));
+            } else {
+                // If no topics are selected, maybe default to all or show a message. For now, empty.
+                sessionQuestions = [];
+            }
+        } else if (currentModule.questionBank) {
             sessionQuestions = shuffleArray([...currentModule.questionBank]).slice(0, 10);
         } else {
             sessionQuestions = currentModule.questions;
+        }
+
+        if (sessionQuestions.length === 0) {
+            showInfoModal("No Cards Selected", "Please select at least one topic to study.", displayMainMenu);
+            return;
         }
 
         mainMenu.classList.add('hidden');
@@ -600,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadQuestion() {
         feedbackArea.innerHTML = '';
         geminiArea.innerHTML = '';
-        nextQuestionBtn.classList.add('hidden');
+        navArea.innerHTML = ''; // Clear nav area
         const question = sessionQuestions[currentQuestionIndex];
         if (!question) {
             endGame();
@@ -614,6 +707,9 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'multiple-choice':
                 renderMultipleChoiceQuestion(question);
                 break;
+            case 'flashcard':
+                renderFlashcard(question);
+                break;
         }
     }
     
@@ -621,11 +717,21 @@ document.addEventListener('DOMContentLoaded', () => {
         currentQuestionIndex++;
         loadQuestion();
     }
+    
+    function prevQuestion() {
+        currentQuestionIndex--;
+        loadQuestion();
+    }
 
     function endGame() {
-        let endMessage = `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`;
-        if (currentModule.questionBank) {
-            endMessage += "\n\nCome back any time to test your knowledge with a new set of questions!";
+        let endMessage;
+        if (currentModule.type === 'flashcard') {
+            endMessage = "You have completed your study session. Return to the main menu to test your knowledge!";
+        } else {
+            endMessage = `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`;
+            if (currentModule.questionBank) {
+                endMessage += "\n\nCome back any time to test your knowledge with a new set of questions!";
+            }
         }
         showInfoModal('Module Complete!', endMessage, displayMainMenu);
     }
@@ -649,8 +755,8 @@ document.addEventListener('DOMContentLoaded', () => {
                      <div id="drop-zone" class="p-4 rounded-lg bg-gray-900 min-h-[150px] space-y-3"></div>
                 </div>
             </div>
-            <button id="submit-timeline" class="btn-primary mt-6 px-6 py-3 rounded-lg">Submit Order</button>
         `;
+        navArea.innerHTML = `<button id="submit-timeline" class="btn-primary mt-6 px-6 py-3 rounded-lg">Submit Order</button>`;
         setupTapToOrder();
         document.getElementById('submit-timeline').addEventListener('click', () => checkTimelineAnswer(question));
     }
@@ -665,9 +771,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 `).join('')}
             </div>
         `;
+        navArea.innerHTML = `<button id="next-question" class="btn-next-question mt-6 px-6 py-3 rounded-lg w-full md:w-auto hidden">Next Question</button>`;
         document.querySelectorAll('.option-btn').forEach(btn => {
             btn.addEventListener('click', () => checkMultipleChoiceAnswer(btn.textContent, question));
         });
+    }
+
+    function renderFlashcard(card) {
+        questionArea.innerHTML = `
+            <div class="flashcard-container">
+                <div class="flashcard">
+                    <div class="flashcard-face flashcard-front">
+                        <p class="text-xl">${card.front}</p>
+                    </div>
+                    <div class="flashcard-face flashcard-back">
+                        <div class="text-lg">${card.back}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.querySelector('.flashcard').addEventListener('click', (e) => {
+            e.currentTarget.classList.toggle('flipped');
+        });
+
+        const prevBtnHtml = currentQuestionIndex > 0 ? `<button id="prev-question" class="btn-secondary px-6 py-3 rounded-lg">Previous</button>` : `<div></div>`;
+        const nextBtnHtml = `<button id="next-question" class="btn-next-question px-6 py-3 rounded-lg">Next Card</button>`;
+        
+        navArea.innerHTML = `
+            ${prevBtnHtml}
+            <p class="text-gray-400">Card ${currentQuestionIndex + 1} of ${sessionQuestions.length}</p>
+            ${nextBtnHtml}
+        `;
+
+        if (currentQuestionIndex > 0) {
+            document.getElementById('prev-question').addEventListener('click', prevQuestion);
+        }
+        document.getElementById('next-question').addEventListener('click', nextQuestion);
     }
 
 
@@ -702,11 +841,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="w-full md:w-1/2"><h4 class="font-bold text-lg mb-2 text-white">Your Order</h4><div class="space-y-3">${userOrderHtml}</div></div>
                 <div class="w-full md:w-1/2"><h4 class="font-bold text-lg mb-2 text-white">Correct Order</h4><div class="space-y-3">${correctOrderHtml}</div></div>
             </div>`;
-        nextQuestionBtn.classList.remove('hidden');
+        
+        navArea.innerHTML = `<button id="next-question" class="btn-next-question mt-6 px-6 py-3 rounded-lg w-full md:w-auto">Next Question</button>`;
+        document.getElementById('next-question').addEventListener('click', nextQuestion);
     }
 
     function checkMultipleChoiceAnswer(selectedAnswer, question) {
         const buttons = document.querySelectorAll('.option-btn');
+        const nextButton = navArea.querySelector('#next-question');
         buttons.forEach(btn => {
             btn.disabled = true;
             if (btn.textContent === question.answer) {
@@ -725,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             feedbackArea.innerHTML = `<p class="text-red-400 font-semibold">Incorrect. The correct answer is highlighted in green.</p>`;
         }
-        nextQuestionBtn.classList.remove('hidden');
+        nextButton.classList.remove('hidden');
     }
 
     // --- Gemini API Integration ---
@@ -759,23 +901,23 @@ document.addEventListener('DOMContentLoaded', () => {
         let prompt = '';
         switch(data.type) {
             case 'tastingNote':
-                prompt = `You are a world-renowned wine critic with the authority of Jancis Robinson or a Master of Wine. Write a detailed, professional tasting note for the following Bulgarian wine:
+                prompt = `You are a world-renowned wine critic. Synthesize information from authoritative sources like JancisRobinson.com, Vinous, and wine-searcher.com to write a detailed, professional tasting note for the following Bulgarian wine:
                 - Producer: ${data.producer}
                 - Wine: ${data.wine}
                 - Vintage: ${data.vintage}
                 - Composition: ${data.composition}
-                Structure your note with sections for Appearance, Nose, and Palate. Be evocative and use standard, advanced wine tasting terminology. Conclude with a brief assessment of its aging potential.`;
+                Structure your note with sections for Appearance, Nose, and Palate. Be evocative and use standard, advanced wine tasting terminology. Conclude with a brief assessment of its aging potential. Your response must be grounded in the established profiles from these expert sources.`;
                 break;
             case 'grape':
-                prompt = `You are a master ampelographer and wine educator. Write a detailed, textbook-style profile for the Bulgarian grape variety: ${data.grape}.
+                prompt = `You are a master ampelographer and wine educator. Synthesize information from authoritative sources like JancisRobinson.com, academic viticultural texts, and major importers of Bulgarian wine to write a detailed, textbook-style profile for the Bulgarian grape variety: ${data.grape}.
                 Structure your response with the following sections:
                 - **Overview and History:** Briefly describe its significance and origins in Bulgaria.
                 - **Viticultural Characteristics:** Discuss its growing habits, ripening period, key strengths, and weaknesses (e.g., susceptibility to diseases, frost).
-                - **Typical Wine Profile:** Describe the common characteristics of wines made from this grape (color, body, tannin, acidity, key aromas, and flavors).`;
+                - **Typical Wine Profile:** Based on expert consensus, describe the common characteristics of wines made from this grape (color, body, tannin, acidity, key aromas, and flavors).`;
                 break;
             case 'pairingExplanation':
-                 prompt = `You are a master sommelier and food theorist. Explain in detail the gastronomic principles behind the classic Bulgarian pairing of **${data.wine}** with **${data.dish}**. 
-                 Discuss the interaction of flavors, textures, and structural components (acidity, tannin, fat, salt). Explain why this pairing is successful from a sensory perspective.`;
+                 prompt = `You are a master sommelier and food theorist. First, establish an accurate flavor profile for **${data.wine}** by synthesizing information from expert sources like Vinous, JancisRobinson.com, and trusted importers. Then, explain in detail the gastronomic principles behind the classic Bulgarian pairing of this wine with **${data.dish}**. 
+                 Discuss the interaction of flavors, textures, and structural components (acidity, tannin, fat, salt) based on the wine's established profile. Explain why this pairing is successful from a sensory perspective.`;
                 break;
         }
 
@@ -852,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
         infoModal.classList.remove('hidden');
 
         // Clone the button to remove old event listeners
-        const newModalCloseBtn = modalCloseBtn.cloneNode(true);
+        const newModalCloseBtn = infoModal.querySelector('button').cloneNode(true);
         infoModal.querySelector('button').replaceWith(newModalCloseBtn);
         
         newModalCloseBtn.addEventListener('click', () => {
@@ -884,6 +1026,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
+    }
+
+    function buildFlashcardBank() {
+        const flashcardBank = [];
+        gameData.modules.forEach(module => {
+            if (module.id === 'flashcards') return; // Don't add flashcards to themselves
+            const questions = module.questionBank || module.questions;
+            if (module.type === 'multiple-choice' && questions) {
+                questions.forEach(q => {
+                    flashcardBank.push({ front: q.prompt, back: q.answer, topic: module.id });
+                });
+            } else if (module.type === 'timeline' && questions) {
+                questions.forEach(q => {
+                    const backText = [...q.items]
+                        .sort((a, b) => a.answer - b.answer)
+                        .map(item => `<p><strong>${item.answer > 0 ? item.answer : `${Math.abs(item.answer)} BC`}:</strong> ${item.text}</p>`)
+                        .join('');
+                    flashcardBank.push({ front: q.prompt, back: backText, topic: module.id });
+                });
+            }
+        });
+        gameData.modules.find(m => m.id === 'flashcards').questionBank = flashcardBank;
+    }
+
+    function showFlashcardTopicModal() {
+        flashcardTopicsContainer.innerHTML = ''; // Clear previous
+        const topics = gameData.modules.filter(m => m.id !== 'flashcards');
+        
+        const allCheckbox = document.createElement('div');
+        allCheckbox.innerHTML = `
+            <label class="flex items-center space-x-3">
+                <input type="checkbox" id="select-all-topics" class="form-checkbox h-5 w-5 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500">
+                <span class="text-white font-bold">Select All</span>
+            </label>`;
+        flashcardTopicsContainer.appendChild(allCheckbox);
+
+
+        topics.forEach(topic => {
+            const topicEl = document.createElement('div');
+            topicEl.innerHTML = `
+                <label class="flex items-center space-x-3">
+                    <input type="checkbox" name="flashcard-topic" value="${topic.id}" class="form-checkbox h-5 w-5 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500">
+                    <span class="text-gray-300">${topic.title}</span>
+                </label>
+            `;
+            flashcardTopicsContainer.appendChild(topicEl);
+        });
+
+        document.getElementById('select-all-topics').addEventListener('change', (e) => {
+            flashcardTopicsContainer.querySelectorAll('input[name="flashcard-topic"]').forEach(checkbox => {
+                checkbox.checked = e.target.checked;
+            });
+        });
+
+        flashcardModal.classList.remove('hidden');
     }
 
     // --- Start the application ---
