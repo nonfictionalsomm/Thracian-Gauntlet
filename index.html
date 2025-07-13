@@ -596,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameData.modules.forEach(module => {
             const isLocked = !module.questions && !module.questionBank && module.id !== 'flashcards';
             const card = document.createElement('div');
-            card.className = `game-card p-6 rounded-lg text-left ${isLocked ? 'opacity-50 cursor-not-allowed' : 'w-full md:w-auto'}`;
+            card.className = `game-card p-6 rounded-lg text-left ${isLocked ? 'opacity-50 cursor-not-allowed' : ''} ${module.id === 'flashcards' ? 'md:w-1/3' : ''}`;
             card.innerHTML = `
                 <h3 class="text-xl font-bold text-white">${module.title}</h3>
                 <p class="text-gray-400 mt-2">${module.description}</p>
@@ -670,7 +670,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedTopics.length > 0) {
                  sessionQuestions = shuffleArray(fullDeck.filter(card => selectedTopics.includes(card.topic)));
             } else {
-                // If no topics are selected, maybe default to all or show a message. For now, empty.
                 sessionQuestions = [];
             }
         } else if (currentModule.questionBank) {
@@ -916,7 +915,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 - **Typical Wine Profile:** Based on expert consensus, describe the common characteristics of wines made from this grape (color, body, tannin, acidity, key aromas, and flavors).`;
                 break;
             case 'pairingExplanation':
-                 prompt = `You are a master sommelier and food theorist. First, establish an accurate flavor profile for **${data.wine}** by synthesizing information from expert sources like Vinous, JancisRobinson.com, and trusted importers. Then, explain in detail the gastronomic principles behind the classic Bulgarian pairing of this wine with **${data.dish}**. 
+                 prompt = `You are a master sommelier and food theorist. First, establish an accurate flavor profile for **${data.wine}** by synthesizing information from expert sources like Vinous and JancisRobinson.com. Then, explain in detail the gastronomic principles behind the classic Bulgarian pairing of this wine with **${data.dish}**. 
                  Discuss the interaction of flavors, textures, and structural components (acidity, tannin, fat, salt) based on the wine's established profile. Explain why this pairing is successful from a sensory perspective.`;
                 break;
         }
@@ -1039,11 +1038,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else if (module.type === 'timeline' && questions) {
                 questions.forEach(q => {
-                    const backText = [...q.items]
-                        .sort((a, b) => a.answer - b.answer)
-                        .map(item => `<p><strong>${item.answer > 0 ? item.answer : `${Math.abs(item.answer)} BC`}:</strong> ${item.text}</p>`)
-                        .join('');
-                    flashcardBank.push({ front: q.prompt, back: backText, topic: module.id });
+                    // Create individual flashcard for each event in the timeline
+                    q.items.forEach(item => {
+                        const front = item.text;
+                        const back = item.answer > 0 ? item.answer.toString() : `${Math.abs(item.answer)} BC`;
+                        flashcardBank.push({ front, back, topic: module.id });
+                    });
                 });
             }
         });
