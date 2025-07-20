@@ -158,7 +158,7 @@
             </div>
             <div id="feedback-area" class="mt-4 text-lg"></div>
             <div id="gemini-area" class="mt-6"></div>
-            <div id="nav-area" class="flex justify-between items-center mt-6"></div>
+            <div id="nav-area" class="flex justify-center items-center mt-6 space-x-4"></div>
         </div>
 
     </div>
@@ -168,7 +168,9 @@
         <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
             <h3 id="modal-title" class="text-2xl font-bold mb-4"></h3>
             <p id="modal-text" class="text-gray-300 mb-6"></p>
-            <button id="modal-close" class="btn-primary w-full px-4 py-2 rounded-lg">Continue</button>
+            <div id="modal-buttons" class="flex justify-end space-x-4">
+                 <button id="modal-close" class="btn-primary px-4 py-2 rounded-lg">Continue</button>
+            </div>
         </div>
     </div>
     
@@ -559,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoModal = document.getElementById('info-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalText = document.getElementById('modal-text');
-    const modalCloseBtn = document.getElementById('modal-close');
+    const modalButtons = document.getElementById('modal-buttons');
     const apiKeyModal = document.getElementById('api-key-modal');
     const openApiKeyModalBtn = document.getElementById('open-api-modal');
     const closeApiKeyModalBtn = document.getElementById('close-api-modal');
@@ -612,6 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 topModulesContainer.appendChild(card);
             }
         });
+        
+        // Check for global mastery when returning to menu
+        checkGlobalMastery();
     }
 
     // --- Event Listeners ---
@@ -653,6 +658,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Flow ---
     function prepareGame(moduleId) {
         currentModule = gameData.modules.find(m => m.id === moduleId);
+
+        // Check for mastery before starting a module
+        const masteryData = getMasteryData();
+        const masteredQuestions = masteryData[moduleId] || [];
+        if (currentModule.questionBank && masteredQuestions.length >= currentModule.questionBank.length) {
+            showInfoModal(
+                `Congratulations!`,
+                `You have mastered The ${currentModule.title} module! Your progress will now be reset so you can continue to practice.`,
+                () => {
+                    resetModuleMastery(moduleId);
+                    showInfoModal(currentModule.title, currentModule.welcomeMessage, startGame);
+                }
+            );
+            return;
+        }
+
         if (moduleId === 'flashcards') {
             showFlashcardTopicModal();
         } else {
@@ -673,13 +694,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionQuestions = [];
             }
         } else if (currentModule.questionBank) {
-            sessionQuestions = shuffleArray([...currentModule.questionBank]).slice(0, 10);
+            // Smart Question Selection
+            const masteryData = getMasteryData();
+            const masteredQuestions = masteryData[currentModule.id] || [];
+            const availableQuestions = currentModule.questionBank.filter(q => !masteredQuestions.includes(q.prompt));
+            sessionQuestions = shuffleArray(availableQuestions).slice(0, 10);
         } else {
             sessionQuestions = currentModule.questions;
         }
 
-        if (sessionQuestions.length === 0) {
-            showInfoModal("No Cards Selected", "Please select at least one topic to study.", displayMainMenu);
+        if (sessionQuestions.length === 0 && currentModule.type !== 'timeline') {
+             // This case is now handled by the mastery check in prepareGame
             return;
         }
 
@@ -724,15 +749,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function endGame() {
         let endMessage;
+        let showKeepGoing = currentModule.questionBank && sessionQuestions.length > 0;
+
         if (currentModule.type === 'flashcard') {
             endMessage = "You have completed your study session. Return to the main menu to test your knowledge!";
+            showKeepGoing = false;
         } else {
-            endMessage = `You have completed The ${currentModule.title}. You correctly answered ${score} out of ${sessionQuestions.length} questions.`;
+            endMessage = `You have completed this round. You correctly answered ${score} out of ${sessionQuestions.length} questions.`;
             if (currentModule.questionBank) {
-                endMessage += "\n\nCome back any time to test your knowledge with a new set of questions!";
+                const masteryData = getMasteryData();
+                const masteredCount = (masteryData[currentModule.id] || []).length;
+                endMessage += `\n\nYou have mastered ${masteredCount} of ${currentModule.questionBank.length} questions in this module.`;
             }
         }
-        showInfoModal('Module Complete!', endMessage, displayMainMenu);
+        showEndGameModal('Round Complete!', endMessage, showKeepGoing);
     }
 
     // --- Question Renderers ---
@@ -770,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `).join('')}
             </div>
         `;
-        navArea.innerHTML = `<button id="next-question" class="btn-next-question mt-6 px-6 py-3 rounded-lg w-full md:w-auto hidden">Next Question</button>`;
+        navArea.innerHTML = `<button id="next-question" class="btn-next-question px-6 py-3 rounded-lg w-full md:w-auto hidden">Next Question</button>`;
         document.querySelectorAll('.option-btn').forEach(btn => {
             btn.addEventListener('click', () => checkMultipleChoiceAnswer(btn.textContent, question));
         });
@@ -860,6 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedAnswer === question.answer) {
             feedbackArea.innerHTML = `<p class="text-green-400 font-semibold">Correct!</p>`;
             score++;
+            addCorrectAnswer(currentModule.id, question.prompt);
             if (question.geminiData) {
                 renderGeminiButton(question.geminiData);
             }
@@ -989,19 +1020,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Utilities ---
     function showInfoModal(title, text, callback) {
         modalTitle.textContent = title;
-        modalText.innerHTML = text.replace(/\n/g, '<br>'); // Use innerHTML to render line breaks
+        modalText.innerHTML = text.replace(/\n/g, '<br>');
+        modalButtons.innerHTML = `<button id="modal-close" class="btn-primary px-4 py-2 rounded-lg">Continue</button>`;
         infoModal.classList.remove('hidden');
 
-        // Clone the button to remove old event listeners
-        const newModalCloseBtn = infoModal.querySelector('button').cloneNode(true);
-        infoModal.querySelector('button').replaceWith(newModalCloseBtn);
-        
+        const newModalCloseBtn = document.getElementById('modal-close');
         newModalCloseBtn.addEventListener('click', () => {
             infoModal.classList.add('hidden');
             if (callback) {
                 callback();
             }
-        }, { once: true }); // Ensure listener only fires once
+        }, { once: true });
+    }
+    
+    function showEndGameModal(title, text, showKeepGoing) {
+        modalTitle.textContent = title;
+        modalText.innerHTML = text.replace(/\n/g, '<br>');
+        
+        let buttonsHtml = `<button id="modal-main-menu" class="btn-secondary px-4 py-2 rounded-lg">Main Menu</button>`;
+        if (showKeepGoing) {
+            buttonsHtml += `<button id="modal-keep-going" class="btn-primary px-4 py-2 rounded-lg">Keep Going</button>`;
+        }
+        modalButtons.innerHTML = buttonsHtml;
+
+        infoModal.classList.remove('hidden');
+
+        document.getElementById('modal-main-menu').addEventListener('click', () => {
+            infoModal.classList.add('hidden');
+            displayMainMenu();
+        }, { once: true });
+
+        if (showKeepGoing) {
+            document.getElementById('modal-keep-going').addEventListener('click', () => {
+                infoModal.classList.add('hidden');
+                startGame(); // Restart the same module
+            }, { once: true });
+        }
     }
 
     function setupTapToOrder() {
@@ -1037,8 +1091,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     flashcardBank.push({ front: q.prompt, back: q.answer, topic: module.id });
                 });
             } else if (module.type === 'timeline' && questions) {
+                // Create individual flashcard for each event in the timeline
                 questions.forEach(q => {
-                    // Create individual flashcard for each event in the timeline
                     q.items.forEach(item => {
                         const front = item.text;
                         const back = item.answer > 0 ? item.answer.toString() : `${Math.abs(item.answer)} BC`;
@@ -1082,6 +1136,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
         flashcardModal.classList.remove('hidden');
     }
+    
+    // --- Progress Tracking Logic ---
+    function getMasteryData() {
+        const data = localStorage.getItem('wineGauntletMastery');
+        return data ? JSON.parse(data) : {};
+    }
+
+    function saveMasteryData(data) {
+        localStorage.setItem('wineGauntletMastery', JSON.stringify(data));
+    }
+
+    function addCorrectAnswer(moduleId, questionPrompt) {
+        const masteryData = getMasteryData();
+        if (!masteryData[moduleId]) {
+            masteryData[moduleId] = [];
+        }
+        if (!masteryData[moduleId].includes(questionPrompt)) {
+            masteryData[moduleId].push(questionPrompt);
+            saveMasteryData(masteryData);
+        }
+    }
+    
+    function resetModuleMastery(moduleId) {
+        const masteryData = getMasteryData();
+        masteryData[moduleId] = [];
+        saveMasteryData(masteryData);
+    }
+    
+    function checkGlobalMastery() {
+        const masteryData = getMasteryData();
+        const quizModules = gameData.modules.filter(m => m.questionBank);
+        const allMastered = quizModules.every(module => {
+            const masteredQuestions = masteryData[module.id] || [];
+            return masteredQuestions.length >= module.questionBank.length;
+        });
+
+        if (allMastered && !sessionStorage.getItem('globalMasteryShown')) {
+            showInfoModal(
+                '🏆 Regional Mastery Achieved! 🏆',
+                'Congratulations! You have demonstrated exceptional knowledge by mastering every module in The Thracian Gauntlet. Your dedication is commendable. To keep your knowledge sharp, use the Flashcard Study module for regular review.',
+                null
+            );
+            sessionStorage.setItem('globalMasteryShown', 'true');
+        }
+    }
+
 
     // --- Start the application ---
     init();
